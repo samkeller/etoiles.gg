@@ -26,6 +26,9 @@ n'est présentée comme réelle.
 | `npm run build` | Construit le site de production |
 | `npm start` | Démarre le serveur Node de production |
 | `npm run preview` | Prévisualise le build |
+| `npm run ingest` | Lance l'ingestion des matchs flex pour les PUUIDs configurés |
+| `npm run ingest -- --backfill` | Lance l'ingestion complète (sans date de début) des matchs flex pour les PUUIDs configurés |
+| `npm run resolvePuids -- "Pseudo#TAG"` | Résout le PUUID d'un joueur via son Riot ID et l'enregistre en base |
 
 ## Configuration
 

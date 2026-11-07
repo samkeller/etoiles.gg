@@ -13,18 +13,25 @@
     "astro": "astro",
     "check": "astro check",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "ingest": "tsx src/scripts/ingest.ts",
+    "ingest:backfill": "tsx src/scripts/ingest.ts --backfill",
+    "resolvePuids": "tsx src/scripts/resolvePuids.ts"
   },
   "dependencies": {
     "@astrojs/node": "^11.1.11",
     "@astrojs/preact": "^6.1.2",
     "@tailwindcss/vite": "^4.3.5",
     "astro": "^7.4.7",
+    "better-sqlite3": "^13.0.3",
+    "dotenv": "^18.0.9",
     "preact": "^11.2.0",
     "tailwindcss": "^4.3.5"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.12",
+    "@types/better-sqlite3": "^9.6.0",
+    "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "vitest": "^5.1.0"
   }

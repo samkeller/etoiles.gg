@@ -30,3 +30,9 @@ data/
 
 # jetbrains setting folder
 .idea/
+
+# db
+etoiles.db
+etoiles.db-journal
+etoiles.db-shm
+etoiles.db-wal
