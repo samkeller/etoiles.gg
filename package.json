@@ -16,7 +16,8 @@
     "test:watch": "vitest",
     "ingest": "tsx src/scripts/ingest.ts",
     "ingest:backfill": "tsx src/scripts/ingest.ts --backfill",
-    "resolvePuids": "tsx src/scripts/resolvePuids.ts"
+    "resolvePuids": "tsx src/scripts/resolvePuids.ts",
+    "syncAssets": "tsx src/scripts/syncAssets.ts"
   },
   "dependencies": {
     "@astrojs/node": "^11.1.11",
@@ -24,6 +25,7 @@
     "@tailwindcss/vite": "^4.3.5",
     "astro": "^7.4.7",
     "better-sqlite3": "^13.0.3",
+    "cdragon-dd": "^2.0.8",
     "dotenv": "^18.0.9",
     "preact": "^11.2.0",
     "tailwindcss": "^4.3.5"
