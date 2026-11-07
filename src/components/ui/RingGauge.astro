@@ -1,0 +1,57 @@
+---
+interface Props {
+	/** Part de victoires, entre 0 et 1. */
+	ratio: number;
+	class?: string;
+}
+
+const { ratio, class: className } = Astro.props;
+
+const RADIUS = 48;
+const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+const TICK_COUNT = 40;
+const clampedRatio = Math.min(Math.max(ratio, 0), 1);
+const ticks = Array.from({ length: TICK_COUNT }, (_, index) => {
+	const angle = (index / TICK_COUNT) * 2 * Math.PI;
+	return {
+		x1: 60 + 55 * Math.cos(angle),
+		y1: 60 + 55 * Math.sin(angle),
+		x2: 60 + (index % 5 === 0 ? 59 : 57.5) * Math.cos(angle),
+		y2: 60 + (index % 5 === 0 ? 59 : 57.5) * Math.sin(angle),
+		reached: index / TICK_COUNT < clampedRatio,
+	};
+});
+---
+
+<figure class:list={['relative aspect-square', className]}>
+	<svg viewBox="0 0 120 120" class="size-full -rotate-90" aria-hidden="true">
+		{
+			ticks.map((tick) => (
+				<line
+					x1={tick.x1}
+					y1={tick.y1}
+					x2={tick.x2}
+					y2={tick.y2}
+					stroke-width="0.8"
+					class:list={[tick.reached ? 'stroke-gold-300' : 'stroke-grey-700']}
+				/>
+			))
+		}
+		<circle cx="60" cy="60" r={RADIUS} fill="none" stroke-width="7" class="stroke-loss" />
+		<circle
+			cx="60"
+			cy="60"
+			r={RADIUS}
+			fill="none"
+			stroke-width="7"
+			stroke-dasharray={CIRCUMFERENCE}
+			stroke-dashoffset={CIRCUMFERENCE * (1 - clampedRatio)}
+			style={`--ring-circumference: ${CIRCUMFERENCE}`}
+			class="animate-ring-draw stroke-win motion-reduce:animate-none"
+		/>
+		<circle cx="60" cy="60" r="41" fill="none" stroke-width="0.6" class="stroke-gold-700" />
+	</svg>
+	<figcaption class="absolute inset-0 grid place-content-center text-center">
+		<slot />
+	</figcaption>
+</figure>

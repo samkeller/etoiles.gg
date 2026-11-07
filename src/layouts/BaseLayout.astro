@@ -1,0 +1,31 @@
+---
+import '../styles/global.css';
+
+interface Props {
+	title?: string;
+	description?: string;
+}
+
+const {
+	title = "Les Étoiles de l'Esport — etoiles.gg",
+	description = "Le carnet de bord des Étoiles de l'Esport : nos matchs joués à cinq.",
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang="fr">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content={description} />
+		<title>{title}</title>
+		<link rel="icon" href="/favicon/favicon.ico" sizes="any" />
+		<link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png" />
+		<link rel="apple-touch-icon" href="/favicon/apple-touch-icon.png" />
+	</head>
+	<body
+		class="min-h-dvh bg-night-950 bg-[url(/riot/background.png)] bg-cover bg-fixed bg-center font-body text-ink antialiased"
+	>
+		<slot />
+	</body>
+</html>

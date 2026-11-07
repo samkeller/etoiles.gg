@@ -1,0 +1,119 @@
+---
+import FormStrip from '../ui/FormStrip.astro';
+import Metric from '../ui/Metric.astro';
+import Panel from '../ui/Panel.astro';
+import RingGauge from '../ui/RingGauge.astro';
+import { formatDate, formatMonthYear, pluralize } from '../../lib/format';
+import type { TeamOverview as Overview } from '../../lib/stats';
+
+interface Props {
+	overview: Overview;
+}
+
+const { overview } = Astro.props;
+const { currentStreak, recentForm } = overview;
+const winPercent = overview.winRate === null ? null : Math.round(overview.winRate * 100);
+const streakIsWin = currentStreak.result === 'win';
+---
+
+<Panel divider aria-labelledby="team-title" class="px-6 pt-12 pb-8 sm:px-10 sm:pb-10">
+	<header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+		<div>
+			<h1
+				id="team-title"
+				class="mt-2 font-display text-4xl font-bold uppercase tracking-wide text-gold-gradient sm:text-5xl"
+			>
+				Les Étoiles de l'Esport
+			</h1>
+		</div>
+		{
+			overview.lastMatchAt !== null && (
+				<p class="flex items-center gap-2 text-sm text-muted">
+					<img src="/riot/misc/clock-icon-gold1.svg" alt="" width="16" height="16" class="size-4" />
+					Dernier alignement des étoiles
+					<time
+						datetime={new Date(overview.lastMatchAt).toISOString()}
+						class="font-semibold text-ink"
+					>
+						{formatDate(overview.lastMatchAt)}
+					</time>
+				</p>
+			)
+		}
+	</header>
+
+	<div class="my-8 h-px bg-linear-to-r from-gold-500/0 via-gold-500/70 to-gold-500/0" aria-hidden="true"></div>
+
+	{
+		winPercent === null ? (
+			<p class="py-10 text-center text-muted">
+				Aucun match joué à cinq pour l'instant. Les statistiques apparaîtront après la
+				première partie complète.
+			</p>
+		) : (
+			<div class="grid items-center gap-10 lg:grid-cols-[auto_minmax(0,1fr)] lg:gap-14">
+				<div class="flex flex-col items-center gap-5">
+					<RingGauge ratio={overview.winRate ?? 0} class="w-56 sm:w-64">
+						<span class="flex items-start justify-center font-display font-bold text-gold-gradient">
+							<span class="text-7xl leading-none tabular-nums">{winPercent}</span>
+							<span class="mt-1 text-3xl leading-none">%</span>
+						</span>
+						<span class="label-caps mt-2 text-muted">de victoires</span>
+					</RingGauge>
+					<ul class="flex gap-6 text-sm">
+						<li class="flex items-center gap-2">
+							<span class="size-2.5 rotate-45 bg-win" aria-hidden="true" />
+							<span class="font-semibold text-ink">{pluralize(overview.winCount, 'victoire')}</span>
+						</li>
+						<li class="flex items-center gap-2">
+							<span class="size-2.5 rotate-45 bg-loss" aria-hidden="true" />
+							<span class="text-muted">{pluralize(overview.lossCount, 'défaite')}</span>
+						</li>
+					</ul>
+				</div>
+
+				<div class="flex min-w-0 flex-col gap-8">
+					<section aria-labelledby="form-title">
+						<div class="flex flex-wrap items-end justify-between gap-3">
+							<h2 id="form-title" class="label-caps text-muted">
+								Forme · {pluralize(recentForm.length, 'dernier match', 'derniers matchs')}
+							</h2>
+							<p class="flex items-baseline gap-2">
+								<span class="label-caps text-muted">Série en cours</span>
+								<span
+									class:list={[
+										'font-display text-xl font-bold',
+										streakIsWin ? 'text-gold-gradient' : 'text-grey-300',
+									]}
+								>
+									{pluralize(currentStreak.count, streakIsWin ? 'victoire' : 'défaite')}
+								</span>
+							</p>
+						</div>
+						<FormStrip results={recentForm} streakCount={currentStreak.count} class="mt-5" />
+					</section>
+
+					<dl class="grid gap-6 border-t border-gold-700/60 pt-6 sm:grid-cols-3">
+						<Metric
+							label="Matchs à cinq"
+							value={overview.matchCount.toLocaleString('fr-FR')}
+							icon="/riot/positions/icon-position-fill.png"
+						/>
+						<Metric
+							label="Meilleure série"
+							value={pluralize(overview.bestWinStreak, 'victoire')}
+							icon="/riot/misc/icon-star-shards-36.png"
+						/>
+						{overview.firstMatchAt !== null && (
+							<Metric
+								label="Ensemble depuis"
+								value={formatMonthYear(overview.firstMatchAt)}
+								icon="/riot/mastery/icon-mastery.svg"
+							/>
+						)}
+					</dl>
+				</div>
+			</div>
+		)
+	}
+</Panel>

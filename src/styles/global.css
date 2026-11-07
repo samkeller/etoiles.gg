@@ -1,0 +1,110 @@
+/*
+ * Charte graphique etoiles.gg — source unique des tokens.
+ * Les tokens @theme génèrent les utilitaires Tailwind (bg-night-900, text-win, font-display…).
+ * Aucune couleur ne doit être écrite en dur ailleurs que dans ce fichier.
+ */
+@import "tailwindcss";
+
+@font-face {
+	font-family: "Beaufort for LoL";
+	src: url("/riot/Fonts_Package/BeaufortForLoL-OTF/BeaufortforLOL-Medium.otf") format("opentype");
+	font-weight: 500;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: "Beaufort for LoL";
+	src: url("/riot/Fonts_Package/BeaufortForLoL-OTF/BeaufortforLOL-Bold.otf") format("opentype");
+	font-weight: 700;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: "Spiegel";
+	src: url("/riot/Fonts_Package/Spiegel-OTF/Spiegel-Regular.otf") format("opentype");
+	font-weight: 400;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: "Spiegel";
+	src: url("/riot/Fonts_Package/Spiegel-OTF/Spiegel-SemiBold.otf") format("opentype");
+	font-weight: 600;
+	font-display: swap;
+}
+
+@theme {
+	--font-display: "Beaufort for LoL", "Times New Roman", serif;
+	--font-body: "Spiegel", "Segoe UI", system-ui, sans-serif;
+
+	/* Palette Hextech */
+	--color-night-950: #010a13;
+	--color-night-900: #091428;
+	--color-night-800: #1e2328;
+	--color-gold-100: #f0e6d2;
+	--color-gold-200: #c8aa6e;
+	--color-gold-300: #c89b3c;
+	--color-gold-500: #785a28;
+	--color-gold-700: #463714;
+	--color-hextech-300: #0ac8b9;
+	--color-grey-300: #a09b8c;
+	--color-grey-700: #3c3c41;
+
+	/* Sémantique : l'or est réservé aux victoires et moments positifs */
+	--color-ink: var(--color-gold-100);
+	--color-muted: var(--color-grey-300);
+	--color-win: var(--color-gold-200);
+	--color-loss: #434d52;
+
+	--shadow-panel: 0 30px 80px -20px rgb(0 0 0 / 0.75);
+	--shadow-glow-gold: 0 0 14px rgb(200 155 60 / 0.6);
+
+	--ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+	--animate-ring-draw: ring-draw 1.6s var(--ease-out-expo) both;
+	--animate-rise: rise 0.7s var(--ease-out-expo) both;
+
+	@keyframes ring-draw {
+		from {
+			stroke-dashoffset: var(--ring-circumference);
+		}
+	}
+
+	@keyframes rise {
+		from {
+			opacity: 0;
+			transform: translateY(10px);
+		}
+	}
+}
+
+@utility label-caps {
+	font-family: var(--font-body);
+	font-size: 0.6875rem;
+	line-height: 1rem;
+	font-weight: 600;
+	letter-spacing: 0.16em;
+	text-transform: uppercase;
+}
+
+@utility text-gold-gradient {
+	background-image: linear-gradient(
+		180deg,
+		var(--color-gold-100) 10%,
+		var(--color-gold-200) 55%,
+		var(--color-gold-300) 100%
+	);
+	-webkit-background-clip: text;
+	background-clip: text;
+	color: transparent;
+}
+
+@layer base {
+	html {
+		color-scheme: dark;
+	}
+
+	::selection {
+		background-color: var(--color-gold-200);
+		color: var(--color-night-950);
+	}
+}

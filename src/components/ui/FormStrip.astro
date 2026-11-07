@@ -1,0 +1,47 @@
+---
+import type { MatchOutcome } from '../../lib/stats';
+
+interface Props {
+	/** Résultats du plus ancien au plus récent. */
+	results: readonly MatchOutcome[];
+	/** Nombre de résultats finaux appartenant à la série en cours. */
+	streakCount?: number;
+	class?: string;
+}
+
+const { results, streakCount = 0, class: className } = Astro.props;
+const streakStart = results.length - streakCount;
+---
+
+<ol class:list={['grid grid-cols-10 gap-x-2 gap-y-4 sm:grid-cols-20', className]}>
+	{
+		results.map((result, index) => {
+			const isWin = result === 'win';
+			const inStreak = index >= streakStart;
+			return (
+				<li
+					class="flex animate-rise justify-center motion-reduce:animate-none"
+					style={`animation-delay: ${index * 35}ms`}
+				>
+					<span
+						class:list={[
+							'grid size-5 rotate-45 place-items-center border',
+							isWin ? 'border-gold-300 bg-gold-700/70' : 'border-grey-700 bg-night-800/90',
+							inStreak && isWin && 'border-gold-100 shadow-glow-gold',
+							inStreak && !isWin && 'border-grey-300/60',
+						]}
+					>
+						<img
+							src={isWin ? '/riot/misc/checkmark-gold2.svg' : '/riot/streaks/miniseries-loss-icon.svg'}
+							alt=""
+							width="24"
+							height="24"
+							class:list={['size-3.5 -rotate-45', !isWin && 'opacity-80']}
+						/>
+					</span>
+					<span class="sr-only">{isWin ? 'Victoire' : 'Défaite'}</span>
+				</li>
+			);
+		})
+	}
+</ol>

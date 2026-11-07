@@ -22,8 +22,14 @@ un MVP de match est une récompense, pas un jugement.
 
 ### État vérifié au 7 novembre 2026
 
-- **Interface :** la route `/` est volontairement une page vide. Il n'y a pas de composants,
-  styles, îlots interactifs, routes API ni données affichées.
+- **Interface :** la route `/` affiche en rendu serveur le panneau d'équipe : jauge
+  circulaire du taux de victoire (victoires et défaites), forme des 20 derniers matchs à
+  cinq avec la série en cours, et indicateurs (matchs à cinq, meilleure série, date du
+  premier match). Aucun JavaScript client, îlot interactif ou endpoint API n'est nécessaire.
+- **Design system :** Tailwind CSS 4 ; les tokens (palette Hextech, polices Beaufort et
+  Spiegel, ombres, animations) sont définis dans `src/styles/global.css` via `@theme`. Les
+  primitives réutilisables sont dans `src/components/ui/` (`Panel`, `RingGauge`,
+  `FormStrip`, `Metric`) et les assemblages de page dans `src/components/sections/`.
 - **Serveur :** Astro 7 en rendu serveur avec adaptateur Node autonome ; Node.js
   `>=22.23.4`.
 - **Ingestion :** `resolvePuids.ts` enregistre un Riot ID dans le roster SQLite ;
@@ -34,11 +40,11 @@ un MVP de match est une récompense, pas un jugement.
 - **Schéma :** tables `players`, `matches`, `participants` et `ingest_runs`, définies dans
   `src/lib/db/schema.sql`. La base est `./etoiles.db` par défaut, surchargeable par
   `DATABASE_PATH`, et ignorée par Git.
-- **Tests :** Vitest est configuré ; `getTeamOverview` possède des tests unitaires pour
-  l'absence de matchs et l'exclusion des lineups partiels. Cette fonction n'est pas encore
-  branchée à la base ni à une route.
-- **Pas encore livré :** agrégations SQL de production, endpoints, interface de statistiques,
-  cron, hébergement Railway configuré ou healthcheck.
+- **Tests :** Vitest teste `getOverview()` avec SQLite en mémoire : absence de matchs,
+  exclusion des lineups partiels, série en cours, meilleure série, forme récente et
+  enregistrements incomplets.
+- **Pas encore livré :** historique, fiches joueurs, synergies, endpoints, cron, hébergement
+  Railway configuré ou healthcheck.
 
 **Limite connue de l'ingestion :** un run demande au plus 100 IDs de match par joueur.
 `--backfill` omet `startTime`, mais ne pagine pas au-delà de cette première page ; plusieurs
@@ -46,16 +52,16 @@ exécutions peuvent compléter les données, sans garantie de backfill exhaustif
 
 ### Stack actuelle et choix futurs
 
-Stack actuelle : Astro, adaptateur Node, TypeScript, `better-sqlite3`, `tsx`, dotenv et
-Vitest. Les requêtes SQLite sont écrites en SQL brut ; aucun ORM n'est utilisé.
-`RIOT_API_KEY` est fourni par l'environnement pour l'accès à l'API Riot.
+Stack actuelle : Astro, adaptateur Node, TypeScript, Tailwind CSS 4, `better-sqlite3`,
+`tsx`, dotenv et Vitest. Les requêtes SQLite sont écrites en SQL brut ; aucun ORM n'est
+utilisé. `RIOT_API_KEY` est fourni par l'environnement pour l'accès à l'API Riot.
 
-Pour la future interface, les choix proposés restent : Astro pour le rendu serveur,
-Preact seulement pour les interactions réellement nécessaires, CSS natif avec des tokens,
-et graphiques SVG maison plutôt qu'une bibliothèque de graphes. Preact et Tailwind ne sont
-pas requis par l'application actuelle ; ne les réintroduire que lors d'un lot qui en a
-besoin. L'hébergement Railway et le volume `/data` restent des objectifs à confirmer, pas
-un déploiement existant.
+Pour la suite de l'interface : Astro pour le rendu serveur, Tailwind et les tokens de
+`global.css` pour tout le style (pas de feuilles de style par composant), Preact seulement
+pour les interactions réellement nécessaires, et graphiques SVG maison plutôt qu'une
+bibliothèque de graphes. Preact reste installé mais n'est pas intégré ; ne l'activer que
+lors d'un lot qui en a besoin. L'hébergement Railway et le volume `/data` restent des
+objectifs à confirmer, pas un déploiement existant.
 
 ## 1. Contrats produit et techniques
 
@@ -72,8 +78,8 @@ un déploiement existant.
    `prefers-reduced-motion`.
 7. Ajouter de nouvelles colonnes SQLite seulement si les performances l'exigent ; les champs
    détaillés sont déjà conservés dans `raw_json`.
-8. La page reste vide jusqu'au démarrage explicite du lot d'interface ci-dessous. Pas de
-   placeholders, composants ou dépendances anticipant des lots futurs.
+8. La page expose uniquement l'aperçu du lot 0. Pas de placeholders, composants ou dépendances
+   anticipant des lots futurs.
 
 ## 2. Décisions UX et visuelles pour la future interface
 
@@ -83,9 +89,14 @@ un déploiement existant.
   partageable. Pas de navigation à onglets avant d'avoir constaté un besoin réel.
 - Pas de bibliothèque de graphiques : SVG maison, adapté aux petits volumes et au style
   visuel du site. N'ajouter une bibliothèque d'animation qu'en cas de besoin démontré.
-- Définir palette, typographie, rayons et mouvements comme tokens CSS avant de les utiliser.
+- Toute couleur, police, ombre ou animation est un token `@theme` de
+  `src/styles/global.css` avant d'être utilisée ; aucune valeur en dur dans les composants.
+  Identité Hextech (bleu nuit, or, Beaufort/Spiegel) et assets Riot de `/public/riot`.
   L'or signifie uniquement une victoire ou un élément positif ; les défaites restent
   neutres/désaturées.
+- Chaque bloc de données est une visualisation (jauge, frise, courbe…) encadrée par
+  `Panel`, pas une simple carte de chiffres ; ajouter une primitive à `components/ui`
+  dès qu'un motif visuel est réutilisé.
 - Éviter les classements négatifs entre coéquipiers. Les insights individuels sont formulés
   de manière positive ou neutre.
 
@@ -93,20 +104,24 @@ un déploiement existant.
 
 ### LOT 0 — Reprise de l'interface et fondations
 
-**État : à faire.** La page vide est l'état actuel volontaire, pas le livrable du lot.
+**État : terminé le 7 novembre 2026.**
 
-- Vérifier le schéma SQLite et les données avant toute agrégation.
-- Créer les tokens et composants réellement nécessaires, puis une page `/` avec un aperçu
-  calculé depuis les matchs complets.
-- Ajouter `getOverview()` et des tests ; servir l'aperçu en rendu serveur, sans fetch client.
-- Décider au moment du besoin si Preact est requis ; ne pas ajouter d'îlot décoratif inutile.
+- Design system Tailwind initié : tokens `@theme`, utilitaires `label-caps` et
+  `text-gold-gradient`, polices et icônes Riot, primitives `Panel`, `RingGauge`,
+  `FormStrip` et `Metric`.
+- `getOverview()` agrège les matchs depuis SQLite (bilan, série en cours, meilleure série,
+  forme des 20 derniers matchs) ; un lineup prétendument complet mais incomplet ou
+  incohérent provoque une erreur explicite.
+- La section `TeamOverview` est rendue côté serveur dans `/`, sans fetch ni JavaScript
+  client ; les animations respectent `prefers-reduced-motion`.
+- Retrait du fond d'étoiles Preact non utilisé ; aucun îlot décoratif n'est chargé.
 
-**Terminé quand :** les chiffres affichés proviennent de la base, excluent les lineups
-partiels et disposent de tests.
+**Validé :** les chiffres affichés proviennent de la base, excluent les lineups partiels,
+sont testés sur SQLite en mémoire, et la page s'adapte aux petits écrans.
 
 ### LOT 1 — Historique des matchs
 
-- Ajouter `getMatches`, `getMatchDetail` et la forme récente, ainsi que les routes GET
+- Ajouter `getMatches` et `getMatchDetail`, ainsi que les routes GET
   `/api/matches.json` et `/api/matches/{id}.json`.
 - Présenter les matchs complets, avec un détail consultable et un lien externe sûr
   (`rel="noopener"`).
@@ -174,3 +189,7 @@ recalculer après le lot 0.
 - Ne pas coder à l'avance les fonctionnalités des lots suivants.
 - Tester chaque agrégation avec un lineup partiel pour garantir son exclusion.
 - Ne jamais afficher une donnée de démonstration comme une donnée réelle.
+- On préfèrera des interfaces modernes, jolies et avec un UX soigné. Cette application est juste une application de présentations de statistiques d'équipe, la présentation est primordiale.
+- Le plus possible utiliser tailwind plutôt que du CSS natif pour maintenir la cohérence et faciliter la maintenance.
+- Si un pattern de style (taille de texte, marge etc) est utilisé, le réutiliser plutôt que de créer un nouveau -> création d'une charte graphique et d'un design system unifié et cohérent.
+- Ne pas trop se casser la tête avec un affichage mobiel parfait.

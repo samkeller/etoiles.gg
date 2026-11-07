@@ -12,9 +12,14 @@ npm ci
 npm run dev
 ```
 
-Le site est servi sur <http://localhost:4321>. La page d'accueil est volontairement
-vide : aucune interface ni donnée de démonstration n'est actuellement publiée.
-L'ingestion Riot fonctionne séparément de l'interface et enregistre les matchs dans SQLite.
+Le site est servi sur <http://localhost:4321>. La page d'accueil affiche le bilan réel
+des matchs joués avec les cinq joueurs, calculé côté serveur depuis SQLite : taux de
+victoire, forme des 20 derniers matchs, série en cours et meilleure série. Les matchs
+partiels ne sont pas inclus ; sans match complet, un état vide est affiché.
+
+Le style passe par Tailwind ; les tokens de la charte (couleurs, polices, animations)
+sont définis dans `src/styles/global.css` et les composants réutilisables dans
+`src/components/ui/`.
 
 ## Commandes
 
@@ -40,6 +45,7 @@ par Git.
 ## Stack
 
 - Astro
+- Tailwind CSS 4
 - Rendu serveur Astro via l'adaptateur Node (compatible Railway)
 - Vitest
 - SQLite avec `better-sqlite3`

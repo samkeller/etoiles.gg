@@ -1,9 +1,32 @@
-<!doctype html>
-<html lang="fr">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>etoiles.gg</title>
-	</head>
-	<body></body>
-</html>
+---
+import TeamOverview from '../components/sections/TeamOverview.astro';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { db } from '../lib/db/db';
+import { getOverview } from '../lib/stats';
+
+const overview = getOverview(db);
+---
+
+<BaseLayout>
+	<div class="mx-auto flex min-h-dvh w-full max-w-6xl flex-col px-4 sm:px-8">
+		<header class="flex items-center justify-between border-b border-gold-700/60 py-5">
+			<a href="/" class="flex items-center gap-3" aria-label="etoiles.gg, accueil">
+				<img src="/favicon/favicon-32x32.png" alt="" width="32" height="32" class="size-7" />
+				<span class="font-display text-xl font-bold tracking-wide text-ink">
+					etoiles<span class="text-gold-200">.gg</span>
+				</span>
+			</a>
+		</header>
+
+		<main class="flex flex-1 flex-col justify-center py-14 sm:py-20">
+			<TeamOverview overview={overview} />
+		</main>
+
+		<footer class="border-t border-gold-700/60 py-5 text-xs leading-relaxed text-muted">
+			etoiles.gg n'est pas approuvé par Riot Games et ne reflète pas les opinions de Riot Games ni
+			de quiconque officiellement impliqué dans la production ou la gestion des propriétés de Riot
+			Games. Riot Games et toutes les propriétés associées sont des marques commerciales ou des
+			marques déposées de Riot Games, Inc.
+		</footer>
+	</div>
+</BaseLayout>
