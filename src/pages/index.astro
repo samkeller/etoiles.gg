@@ -1,0 +1,140 @@
+---
+import Starfield from '../islands/Starfield';
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const sections = [
+	{ id: 'champions', index: '01', title: 'Nos champions', note: 'Les picks qui nous ressemblent' },
+	{ id: 'synergies', index: '02', title: 'Nos synergies', note: 'Quand deux étoiles s’alignent' },
+	{ id: 'compositions', index: '03', title: 'Nos compositions', note: 'Cinq joueurs, une idée' },
+	{ id: 'timeline', index: '04', title: 'La saison', note: 'Notre histoire, match après match' },
+];
+---
+
+<BaseLayout>
+	<main>
+		<section class="hero" id="accueil">
+			<Starfield client:load />
+			<div class="hero-glow" aria-hidden="true"></div>
+			<nav class="site-nav shell" aria-label="Navigation principale">
+				<a class="wordmark" href="#accueil" aria-label="etoiles.gg, accueil">
+					<span class="wordmark-star" aria-hidden="true">★</span>
+					<span>etoiles<span class="wordmark-dot">.gg</span></span>
+				</a>
+				<a class="nav-link" href="#equipe">L’équipe <span aria-hidden="true">↓</span></a>
+			</nav>
+
+			<div class="hero-content shell">
+				<p class="eyebrow"><span class="live-dot"></span> Le carnet de bord d’une équipe</p>
+				<h1>Les Étoiles<br />de l’<span>Esport</span></h1>
+				<p class="hero-copy">
+					Cinq joueurs. Une équipe. Toutes les histoires que l’on écrit ensemble.
+				</p>
+				<a class="hero-cta" href="#equipe">
+					Découvrir notre histoire <span aria-hidden="true">↘</span>
+				</a>
+
+				<div class="hero-stats" aria-label="Statistiques de l’équipe">
+					<div class="hero-stat">
+						<span class="stat-value">—</span>
+						<span class="stat-label">matchs à cinq</span>
+					</div>
+					<div class="stat-divider" aria-hidden="true"></div>
+					<div class="hero-stat">
+						<span class="stat-value">—<small>%</small></span>
+						<span class="stat-label">taux de victoire</span>
+					</div>
+					<div class="stat-divider" aria-hidden="true"></div>
+					<div class="hero-stat">
+						<span class="stat-value">—</span>
+						<span class="stat-label">série en cours</span>
+					</div>
+				</div>
+				<p class="data-caption"><span aria-hidden="true">✦</span> Les données arrivent bientôt</p>
+			</div>
+
+			<a class="scroll-cue" href="#equipe" aria-label="Défiler vers l’équipe">
+				<span aria-hidden="true">↓</span>
+			</a>
+			<div class="hero-index" aria-hidden="true">EUW · FLEX 5V5</div>
+		</section>
+
+		<section class="intro-section shell" id="equipe">
+			<div class="section-kicker"><span>✦</span> Notre terrain de jeu</div>
+			<div class="intro-grid">
+				<h2>La victoire est<br />une histoire <em>collective.</em></h2>
+				<div class="intro-aside">
+					<p>
+						Pas de stats en solo ici. Seulement les parties où les cinq Étoiles sont
+						réunies — les compos, les réflexes et les moments qui font notre équipe.
+					</p>
+					<div class="data-status"><span></span> En attente de la première synchronisation</div>
+				</div>
+			</div>
+		</section>
+
+		<section class="story-section shell" aria-label="Les statistiques de l’équipe">
+			<div class="section-heading">
+				<div>
+					<p class="section-kicker"><span>✦</span> Les constellations</p>
+					<h2>Une équipe, mille façons de briller.</h2>
+				</div>
+				<p class="section-note">Statistiques calculées uniquement sur les matchs joués à cinq.</p>
+			</div>
+
+			<div class="section-grid">
+				{sections.map((section) => (
+					<article class="story-card" id={section.id}>
+						<div class="card-topline">
+							<span>{section.index} / 04</span>
+							<span class="card-star" aria-hidden="true">✦</span>
+						</div>
+						<h3>{section.title}</h3>
+						<p class="card-note">{section.note}</p>
+						<div class="empty-state">
+							<span class="empty-star" aria-hidden="true">✧</span>
+							<p>Cette constellation attend sa première étoile.</p>
+						</div>
+					</article>
+				))}
+			</div>
+		</section>
+
+		<section class="roster-section">
+			<div class="shell roster-inner">
+				<div>
+					<p class="section-kicker"><span>✦</span> Le roster</p>
+					<h2>Cinq chemins.<br /><em>Un même ciel.</em></h2>
+				</div>
+				<div class="roster-empty">
+					<span aria-hidden="true">✧</span>
+					<p>Les noms de l’équipe apparaîtront ici après la configuration du roster.</p>
+				</div>
+			</div>
+		</section>
+
+		<section class="matches-section shell" id="matchs">
+			<div class="section-heading">
+				<div>
+					<p class="section-kicker"><span>✦</span> Le journal de bord</p>
+					<h2>Chaque partie compte.</h2>
+				</div>
+				<span class="updating-label">EN ATTENTE DES DONNÉES</span>
+			</div>
+			<div class="matches-empty">
+				<span class="empty-star" aria-hidden="true">✧</span>
+				<p>La première partie de notre histoire reste à raconter.</p>
+			</div>
+		</section>
+	</main>
+
+	<footer class="site-footer">
+		<div class="shell footer-inner">
+			<a class="wordmark footer-brand" href="#accueil">
+				<span class="wordmark-star" aria-hidden="true">★</span>
+				<span>etoiles<span class="wordmark-dot">.gg</span></span>
+			</a>
+			<p>Fait à cinq, pour les cinq. <span aria-hidden="true">✦</span></p>
+			<p class="footer-sync">Dernière synchro <span>—</span></p>
+		</div>
+	</footer>
+</BaseLayout>
