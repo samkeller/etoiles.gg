@@ -12,9 +12,9 @@ npm ci
 npm run dev
 ```
 
-Le site est servi sur <http://localhost:4321>. Les statistiques restent volontairement
-vides tant que l'ingestion Riot n'est pas configurée : aucune donnée de démonstration
-n'est présentée comme réelle.
+Le site est servi sur <http://localhost:4321>. La page d'accueil est volontairement
+vide : aucune interface ni donnée de démonstration n'est actuellement publiée.
+L'ingestion Riot fonctionne séparément de l'interface et enregistre les matchs dans SQLite.
 
 ## Commandes
 
@@ -32,14 +32,14 @@ n'est présentée comme réelle.
 
 ## Configuration
 
-Copier `.env.example` vers `.env` et renseigner `RIOT_API_KEY` avant de configurer
-l'ingestion. Ne jamais committer `.env` ni une clé Riot. La base SQLite locale sera
-stockée dans `data/`, dossier ignoré par Git.
+Copier `.env.example` vers `.env` et renseigner `RIOT_API_KEY` avant de lancer
+l'ingestion. Ne jamais committer `.env` ni une clé Riot. La base SQLite est stockée
+dans `./etoiles.db` par défaut (chemin configurable avec `DATABASE_PATH`), fichier ignoré
+par Git.
 
 ## Stack
 
-- Astro et Preact pour les îlots interactifs
+- Astro
 - Rendu serveur Astro via l'adaptateur Node (compatible Railway)
-- Tailwind CSS v4
 - Vitest
-- SQLite avec `better-sqlite3` (à intégrer avec le batch d'ingestion)
+- SQLite avec `better-sqlite3`

@@ -1,0 +1,176 @@
+# etoiles.gg — Roadmap macro fonctionnelle & technique
+
+Document de référence pour le projet. Il distingue l'existant vérifié des décisions et
+fonctionnalités encore à réaliser ; les éléments futurs ne doivent pas être anticipés par
+du code inutilisé.
+
+## 0. Contexte et état du projet
+
+### Produit
+
+Dashboard de statistiques pour une équipe de cinq joueurs de League of Legends en classé
+flexible. Priorités :
+
+1. Encourager l'équipe avec un affichage soigné.
+2. Suivre la progression individuelle dans le cadre collectif.
+3. Raconter les matchs, les synergies et aider à la draft.
+
+Les statistiques d'équipe ne comptent que les matchs où les cinq joueurs sont présents
+(`lineup_size = 5`). Les matchs partiels doivent rester distincts et ne jamais contaminer
+les chiffres de l'équipe. Aucune fonctionnalité ne doit classer ou humilier les joueurs ;
+un MVP de match est une récompense, pas un jugement.
+
+### État vérifié au 7 novembre 2026
+
+- **Interface :** la route `/` est volontairement une page vide. Il n'y a pas de composants,
+  styles, îlots interactifs, routes API ni données affichées.
+- **Serveur :** Astro 7 en rendu serveur avec adaptateur Node autonome ; Node.js
+  `>=22.23.4`.
+- **Ingestion :** `resolvePuids.ts` enregistre un Riot ID dans le roster SQLite ;
+  `ingest.ts` récupère les matchs flex (`queue_id = 440`) et leur `raw_json`.
+- **Base locale observée :** 5 joueurs, 190 matchs : 58 à cinq, 10 à quatre, 3 à trois,
+  80 à deux et 39 à un joueur. Le dernier run enregistré a réussi sans nouveau match.
+  Ces volumes sont un instantané local, pas des constantes produit.
+- **Schéma :** tables `players`, `matches`, `participants` et `ingest_runs`, définies dans
+  `src/lib/db/schema.sql`. La base est `./etoiles.db` par défaut, surchargeable par
+  `DATABASE_PATH`, et ignorée par Git.
+- **Tests :** Vitest est configuré ; `getTeamOverview` possède des tests unitaires pour
+  l'absence de matchs et l'exclusion des lineups partiels. Cette fonction n'est pas encore
+  branchée à la base ni à une route.
+- **Pas encore livré :** agrégations SQL de production, endpoints, interface de statistiques,
+  cron, hébergement Railway configuré ou healthcheck.
+
+**Limite connue de l'ingestion :** un run demande au plus 100 IDs de match par joueur.
+`--backfill` omet `startTime`, mais ne pagine pas au-delà de cette première page ; plusieurs
+exécutions peuvent compléter les données, sans garantie de backfill exhaustif.
+
+### Stack actuelle et choix futurs
+
+Stack actuelle : Astro, adaptateur Node, TypeScript, `better-sqlite3`, `tsx`, dotenv et
+Vitest. Les requêtes SQLite sont écrites en SQL brut ; aucun ORM n'est utilisé.
+`RIOT_API_KEY` est fourni par l'environnement pour l'accès à l'API Riot.
+
+Pour la future interface, les choix proposés restent : Astro pour le rendu serveur,
+Preact seulement pour les interactions réellement nécessaires, CSS natif avec des tokens,
+et graphiques SVG maison plutôt qu'une bibliothèque de graphes. Preact et Tailwind ne sont
+pas requis par l'application actuelle ; ne les réintroduire que lors d'un lot qui en a
+besoin. L'hébergement Railway et le volume `/data` restent des objectifs à confirmer, pas
+un déploiement existant.
+
+## 1. Contrats produit et techniques
+
+1. Les agrégations et requêtes appartiennent à `src/lib/stats.ts` ; les routes API sérialisent
+   les résultats ; les composants ne contiennent pas de logique métier.
+2. Toute statistique « équipe » filtre `lineup_size = 5`. Les lineups partiels ont un
+   affichage distinct, masqué par défaut.
+3. Endpoints futurs : GET uniquement, paramètres validés, réponses agrégées et réponses vides
+   explicites si aucune donnée n'est disponible.
+4. Tester les fonctions d'agrégation avant de les exposer : cas nominal, aucun résultat et
+   lineup partiel. Utiliser des fixtures anonymisées.
+5. Ne jamais committer de secret ni de base locale, ni journaliser `RIOT_API_KEY`.
+6. Accessibilité : contraste AA, focus visible, libellés accessibles et respect de
+   `prefers-reduced-motion`.
+7. Ajouter de nouvelles colonnes SQLite seulement si les performances l'exigent ; les champs
+   détaillés sont déjà conservés dans `raw_json`.
+8. La page reste vide jusqu'au démarrage explicite du lot d'interface ci-dessous. Pas de
+   placeholders, composants ou dépendances anticipant des lots futurs.
+
+## 2. Décisions UX et visuelles pour la future interface
+
+- Commencer par une page narrative unique `/`. Les détails de match, joueur et synergies
+  s'ouvrent en dialog tant qu'ils ne nécessitent pas d'URL partageable.
+- N'ajouter des routes dédiées que si un détail devient une destination consultée ou
+  partageable. Pas de navigation à onglets avant d'avoir constaté un besoin réel.
+- Pas de bibliothèque de graphiques : SVG maison, adapté aux petits volumes et au style
+  visuel du site. N'ajouter une bibliothèque d'animation qu'en cas de besoin démontré.
+- Définir palette, typographie, rayons et mouvements comme tokens CSS avant de les utiliser.
+  L'or signifie uniquement une victoire ou un élément positif ; les défaites restent
+  neutres/désaturées.
+- Éviter les classements négatifs entre coéquipiers. Les insights individuels sont formulés
+  de manière positive ou neutre.
+
+## 3. Lots à réaliser
+
+### LOT 0 — Reprise de l'interface et fondations
+
+**État : à faire.** La page vide est l'état actuel volontaire, pas le livrable du lot.
+
+- Vérifier le schéma SQLite et les données avant toute agrégation.
+- Créer les tokens et composants réellement nécessaires, puis une page `/` avec un aperçu
+  calculé depuis les matchs complets.
+- Ajouter `getOverview()` et des tests ; servir l'aperçu en rendu serveur, sans fetch client.
+- Décider au moment du besoin si Preact est requis ; ne pas ajouter d'îlot décoratif inutile.
+
+**Terminé quand :** les chiffres affichés proviennent de la base, excluent les lineups
+partiels et disposent de tests.
+
+### LOT 1 — Historique des matchs
+
+- Ajouter `getMatches`, `getMatchDetail` et la forme récente, ainsi que les routes GET
+  `/api/matches.json` et `/api/matches/{id}.json`.
+- Présenter les matchs complets, avec un détail consultable et un lien externe sûr
+  (`rel="noopener"`).
+- Afficher les matchs partiels dans une zone distincte, repliée par défaut.
+
+**Terminé quand :** chaque match peut être consulté et les matchs partiels n'affectent aucun
+indicateur d'équipe.
+
+### LOT 2 — Joueurs et progression
+
+- Calculer fiches joueurs, pools de champions, progression et rôles à partir des matchs
+  pertinents ; ajouter les routes de données nécessaires.
+- Afficher les cinq joueurs sans classement interne humiliant ; ajouter le détail joueur
+  seulement si les données justifient un drill-down.
+- N'ajouter que les graphiques utiles et testés.
+
+**Terminé quand :** chaque fiche a des données vérifiées et des insights neutres ou positifs.
+
+### LOT 3 — Récit collectif et synergies
+
+- Ajouter timeline, séries, synergies de champions/joueurs et compositions, avec seuil minimal
+  de matchs pour éviter les conclusions fragiles.
+- Exposer des routes GET dédiées si le rendu serveur ne suffit pas.
+- Rendre les sélections interactives seulement si leur usage est confirmé.
+
+**Terminé quand :** les indicateurs excluent les matchs partiels et les seuils de fiabilité
+sont visibles et testés.
+
+### LOT 4 — Exploitation et déploiement
+
+- Ajouter une synchronisation planifiée seulement après validation du déploiement et du
+  fonctionnement de l'ingestion.
+- Ajouter healthcheck, statut de synchronisation, métadonnées et documentation de démarrage.
+- Vérifier le stockage persistant, les variables d'environnement, les logs et le comportement
+  mobile/accessibilité avant mise en production.
+
+**Terminé quand :** un déploiement documenté peut se synchroniser sans intervention manuelle
+et survivre à un redémarrage du serveur.
+
+### LOT 5 — Réserve, décision explicite requise
+
+- Navigation à onglets, routes partageables de joueurs ou matchs.
+- Heatmap calendaire, records individuels, match du mois.
+- Données de timeline détaillées d'un match.
+- Page dédiée aux matchs partiels.
+
+## 4. Ordre macro indicatif
+
+| Lot | Livrable |
+|---|---|
+| 0 | Première interface réelle et aperçu d'équipe vérifié |
+| 1 | Historique consultable, matchs partiels isolés |
+| 2 | Fiches des cinq joueurs et progression |
+| 3 | Récit collectif et synergies fiables |
+| 4 | Synchronisation et déploiement opérationnels |
+| 5 | Options retenues après usage réel |
+
+L'ordre privilégie la confiance dans les données, puis l'adhésion des joueurs, la lecture
+collective et enfin l'exploitation autonome. Les durées de l'ancienne estimation sont à
+recalculer après le lot 0.
+
+## 5. Rappel pour les contributions
+
+- Distinguer l'état vérifié des intentions ; mettre ce document à jour après chaque lot.
+- Ne pas coder à l'avance les fonctionnalités des lots suivants.
+- Tester chaque agrégation avec un lineup partiel pour garantir son exclusion.
+- Ne jamais afficher une donnée de démonstration comme une donnée réelle.
