@@ -1,0 +1,80 @@
+---
+const possibleIcons = [
+    {
+        key: "kills",
+        label: "Kills",
+        iconPath: "/riot/ui/kills.png",
+    },
+    {
+        key: "gold",
+        label: "Or",
+        iconPath: "/riot/ui/icon_gold.png",
+    },
+    {
+        key: "vision",
+        label: "Vision",
+        iconPath: "/riot/ui/ward.png",
+    },
+    {
+        key: "towers",
+        label: "Tours",
+        iconPath: "/riot/ui/tower_building_blue.png",
+    },
+    {
+        key: "inhibitors",
+        label: "Inhib.",
+        iconPath: "/riot/ui/inhibitor_building_blue.png",
+    },
+    {
+        key: "dragons",
+        label: "Dragons",
+        iconPath: "/riot/ui/dragon-100.png",
+    },
+    {
+        key: "heralds",
+        label: "Héraut",
+        iconPath: "/riot/ui/herald-100.png",
+    },
+    {
+        key: "barons",
+        label: "Barons",
+        iconPath: "/riot/ui/nashor.png",
+    },
+    {
+        key: "creepScore",
+        label: "Creep",
+        iconPath: "/riot/ui/creep.png"
+    },
+    {
+        key: "damage",
+        label: "Dégats",
+        iconPath: "/riot/ui/kills.png"
+    }
+] as const;
+
+type PossibleKeys = (typeof possibleIcons)[number]["key"];
+
+interface Props {
+    key: PossibleKeys;
+    size: "sm" | "md" | "lg";
+}
+
+const { key, size } = Astro.props;
+
+const iconData = possibleIcons.find((i) => i.key === key);
+---
+
+{
+    iconData ? (
+        <img
+            src={iconData.iconPath}
+            alt={`Icon ${iconData.label}`}
+            class:list={[
+                "opacity-70",
+                size === "sm" && "size-3",
+                size === "md" && "size-4",
+                size === "lg" && "size-5",
+            ]}
+        />
+    ) : null
+}

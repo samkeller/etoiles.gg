@@ -85,7 +85,7 @@ for (const matchId of todo) {
             insPart.run(matchId, p.puuid, p.championName, p.individualPosition,
                 p.kills, p.deaths, p.assists, p.win ? 1 : 0, ours.length);
             db.prepare('UPDATE players SET game_name = ?, tag_line = ? WHERE puuid = ?')
-                .run(p.riotIdGameName, p.riotIdTagLine, p.puuid);
+                .run(p.riotIdGameName, p.riotIdTagline, p.puuid);
         }
         if (ours.length >= 2) newTeamMatches++;
         log.info(`  ✓ ${matchId} — ${ours.length}/5 étoiles`);

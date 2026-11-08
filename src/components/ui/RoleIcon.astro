@@ -1,0 +1,13 @@
+---
+import { roleIcon, roleLabel } from '../../lib/lol';
+import type { Position } from '../../lib/types';
+
+interface Props {
+	role: Position | null;
+	class?: string;
+}
+
+const { role, class: className = 'size-4' } = Astro.props;
+---
+
+<img src={roleIcon(role)} alt={roleLabel(role)} title={roleLabel(role)} width="34" height="34" class:list={['shrink-0 object-contain', className]} />

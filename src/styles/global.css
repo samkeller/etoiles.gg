@@ -98,6 +98,15 @@
 	color: transparent;
 }
 
+@utility focus-ring {
+	outline: 2px solid transparent;
+	outline-offset: 2px;
+
+	&:focus-visible {
+		outline-color: var(--color-gold-200);
+	}
+}
+
 @layer base {
 	html {
 		color-scheme: dark;

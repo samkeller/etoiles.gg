@@ -1,0 +1,41 @@
+---
+import { championIcon, championName } from '../../lib/lol';
+import type { MatchOutcome } from '../../lib/stats';
+
+interface Props {
+	champion: string;
+	size?: 'sm' | 'md' | 'lg';
+	/** Teinte le cadre : or pour une victoire, gris pour une défaite. */
+	outcome?: MatchOutcome;
+	class?: string;
+}
+
+const { champion, size = 'md', outcome, class: className } = Astro.props;
+const name = championName(champion);
+const sizes = {
+	sm: 'size-7 text-[0.625rem]',
+	md: 'size-10 text-xs',
+	lg: 'size-14 text-sm',
+};
+---
+
+<span
+	class:list={[
+		'relative inline-grid shrink-0 place-items-center overflow-hidden border bg-night-800 font-display font-bold text-muted',
+		sizes[size],
+		outcome === 'win' ? 'border-gold-300' : outcome === 'loss' ? 'border-grey-700' : 'border-gold-700',
+		className,
+	]}
+	title={name}
+>
+	<span aria-hidden="true">{name.slice(0, 2)}</span>
+	<img
+		src={championIcon(champion)}
+		alt={name}
+		width="120"
+		height="120"
+		loading="lazy"
+		decoding="async"
+		class:list={['absolute inset-0 size-full scale-110 object-cover', outcome === 'loss' && 'saturate-50']}
+	/>
+</span>

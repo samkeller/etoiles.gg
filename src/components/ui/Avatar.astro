@@ -1,0 +1,16 @@
+---
+interface Props {
+	src: string;
+	class?: string;
+}
+
+const { src, class: className = 'size-20' } = Astro.props;
+---
+
+<span class:list={['relative inline-grid shrink-0 place-items-center', className]} aria-hidden="true">
+	<span class="absolute inset-0 rounded-full bg-linear-to-b from-gold-100 via-gold-300 to-gold-500 p-0.5">
+		<span class="block size-full rounded-full bg-night-950"></span>
+	</span>
+	<img src={src} alt="" width="96" height="96" class="relative size-[86%] rounded-full object-cover" />
+	<span class="absolute -bottom-1 size-2.5 rotate-45 border border-gold-200 bg-night-950"></span>
+</span>

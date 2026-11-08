@@ -1,0 +1,116 @@
+---
+import Avatar from '../ui/Avatar.astro';
+import ChampionIcon from '../ui/ChampionIcon.astro';
+import MeterBar from '../ui/MeterBar.astro';
+import Panel from '../ui/Panel.astro';
+import RoleIcon from '../ui/RoleIcon.astro';
+import Sparkline from '../ui/Sparkline.astro';
+import StatRow from '../ui/StatRow.astro';
+import { formatDecimal, formatKda, formatPercent, formatShortDate } from '../../lib/format';
+import { championName, profileIcon, roleLabel } from '../../lib/lol';
+import { PROGRESSION_WINDOW, RECENT_WINDOW, type PlayerProfile } from '../../lib/stats';
+
+interface Props {
+	player: PlayerProfile;
+}
+
+const { player } = Astro.props;
+const signature = player.champions.slice(0, 3);
+const showsVision = player.mainRole === 'UTILITY';
+const perMinute = showsVision ? player.visionPerMinute : player.csPerMinute;
+const recentIsUp =
+	player.recentKillParticipation !== null &&
+	player.killParticipation !== null &&
+	player.recentKillParticipation > player.killParticipation;
+const percent = (value: number | null) => (value === null ? '—' : formatPercent(value));
+---
+
+<Panel as="article" class="flex h-full flex-col px-5 pt-6 pb-5" aria-label={`Fiche de ${player.name}`}>
+	<header class="flex flex-col items-center text-center">
+		<p class="label-caps flex items-center gap-1.5 text-gold-200">
+			<RoleIcon role={player.mainRole} class="size-4" />
+			{roleLabel(player.mainRole)}
+		</p>
+		<Avatar src={profileIcon(player.puuid)} class="mt-4 size-20" />
+		<h3 class="mt-4 font-display text-xl font-bold text-ink">{player.name}</h3>
+		{player.tagLine && <p class="text-xs text-muted">#{player.tagLine}</p>}
+	</header>
+
+	{
+		player.games === 0 ? (
+			<p class="mt-6 text-center text-sm text-muted">Pas encore de match joué à cinq.</p>
+		) : (
+			<>
+				<section class="mt-6" aria-label="Champions les plus joués">
+					<ul class="grid grid-cols-3 gap-3">
+						{signature.map((record) => (
+							<li class="flex flex-col items-center gap-1.5">
+								<ChampionIcon champion={record.champion} size="lg" />
+								<span class="text-[0.6875rem] tabular-nums text-muted">
+									<span class="font-semibold text-ink">{record.games}</span> · {formatPercent(record.wins / record.games)}
+								</span>
+								<MeterBar ratio={record.wins / record.games} tone="win" class="w-full" />
+								<span class="sr-only">
+									{championName(record.champion)} : {record.games} matchs, {record.wins} victoires
+								</span>
+							</li>
+						))}
+					</ul>
+				</section>
+
+				<dl class="mt-5 divide-y divide-gold-700/40 border-y border-gold-700/40">
+					<StatRow
+						label="KDA"
+						value={player.kda === null ? '—' : formatDecimal(player.kda)}
+						hint={[player.averageKills, player.averageDeaths, player.averageAssists]
+							.map((value) => formatDecimal(value ?? 0))
+							.join(' / ')}
+					/>
+					<StatRow label="Part. aux kills" value={percent(player.killParticipation)} />
+					<StatRow label="Part des dégâts" value={percent(player.damageShare)} />
+					<StatRow
+						label={showsVision ? 'Vision / min' : 'CS / min'}
+						value={perMinute === null ? '—' : formatDecimal(perMinute)}
+					/>
+				</dl>
+
+				{player.progression.length > 1 && (
+					<figure class="mt-5">
+						<figcaption class="flex items-baseline justify-between gap-2">
+							<span class="label-caps text-muted">KP</span>
+							{player.recentKillParticipation !== null && (
+								<span class:list={['text-xs tabular-nums', recentIsUp ? 'text-gold-200' : 'text-muted']}>
+									{recentIsUp && <span aria-hidden="true">▲ </span>}
+									{RECENT_WINDOW} derniers : {formatPercent(player.recentKillParticipation)}
+								</span>
+							)}
+						</figcaption>
+						<Sparkline values={player.progression} baseline={player.killParticipation} class="mt-2 h-12 w-full" />
+					</figure>
+				)}
+
+				{player.bestGame && (
+					<div class="mt-auto pt-5">
+						<p class="label-caps text-muted">Meilleure partie</p>
+						<button
+							type="button"
+							data-match-id={player.bestGame.matchId}
+							aria-haspopup="dialog"
+							class="focus-ring mt-2 flex w-full items-center gap-3 border border-gold-700/60 bg-night-950/50 p-2 text-left transition-colors hover:border-gold-300 hover:bg-gold-700/20 cursor-pointer"
+						>
+							<ChampionIcon champion={player.bestGame.champion} size="md" outcome={player.bestGame.outcome} />
+							<span class="flex min-w-0 flex-col">
+								<span class="font-display font-bold tabular-nums text-ink">
+									{formatKda(player.bestGame.kills, player.bestGame.deaths, player.bestGame.assists)}
+								</span>
+								<span class="truncate text-xs text-muted">
+									{championName(player.bestGame.champion)} · {formatShortDate(player.bestGame.startedAt)}
+								</span>
+							</span>
+						</button>
+					</div>
+				)}
+			</>
+		)
+	}
+</Panel>

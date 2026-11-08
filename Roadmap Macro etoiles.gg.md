@@ -22,29 +22,48 @@ un MVP de match est une récompense, pas un jugement.
 
 ### État vérifié au 7 novembre 2026
 
-- **Interface :** la route `/` affiche en rendu serveur le panneau d'équipe : jauge
-  circulaire du taux de victoire (victoires et défaites), forme des 20 derniers matchs à
-  cinq avec la série en cours, et indicateurs (matchs à cinq, meilleure série, date du
-  premier match). Aucun JavaScript client, îlot interactif ou endpoint API n'est nécessaire.
+- **Interface :** la route `/` affiche en rendu serveur, sur une page unique ancrée
+  (Équipe, Joueurs, Historique) :
+  - le panneau d'équipe : jauge du taux de victoire, forme des 20 derniers matchs à cinq,
+    série en cours et indicateurs ;
+  - les fiches des cinq joueurs : rôle principal, trois champions signatures avec leur taux
+    de victoire, KDA, participation aux kills, part des dégâts, CS/min (vision/min pour le
+    support), courbe d'implication (moyenne glissante sur 5 matchs) et meilleure partie ;
+  - l'historique des matchs à cinq (10 visibles, les autres repliés) et, dans une zone
+    distincte repliée, les matchs partiels de 2 à 4 Étoiles. Les parties à un seul joueur
+    ne sont pas des matchs d'équipe et ne sont pas affichées.
+  Un clic sur un match (ou sur une « meilleure partie ») ouvre un `<dialog>` natif dont le
+  contenu est un fragment HTML rendu par le serveur (`/partials/matches/{id}`) : les deux
+  équipes, leurs objectifs, la feuille de chaque joueur et un lien League of Graphs
+  (`rel="noopener noreferrer"`). Le seul JavaScript client est ce petit script du dialog.
+- **API :** GET `/api/matches.json?scope=full|partial`, `/api/matches/{id}.json` (400 si
+  l'identifiant est invalide, 404 s'il est inconnu) et `/api/players.json`.
 - **Design system :** Tailwind CSS 4 ; les tokens (palette Hextech, polices Beaufort et
-  Spiegel, ombres, animations) sont définis dans `src/styles/global.css` via `@theme`. Les
-  primitives réutilisables sont dans `src/components/ui/` (`Panel`, `RingGauge`,
-  `FormStrip`, `Metric`) et les assemblages de page dans `src/components/sections/`.
+  Spiegel, ombres, animations) et les utilitaires (`label-caps`, `text-gold-gradient`,
+  `focus-ring`) sont définis dans `src/styles/global.css`. Les primitives réutilisables
+  sont dans `src/components/ui/` (`Panel`, `RingGauge`, `FormStrip`, `Metric`,
+  `SectionHeading`, `Disclosure`, `ChampionIcon`, `RoleIcon`, `Avatar`, `MeterBar`,
+  `Sparkline`, `StatRow`), les composants métier dans `src/components/matches/` et
+  `src/components/players/`, et les assemblages de page dans `src/components/sections/`.
 - **Serveur :** Astro 7 en rendu serveur avec adaptateur Node autonome ; Node.js
   `>=22.23.4`.
 - **Ingestion :** `resolvePuids.ts` enregistre un Riot ID dans le roster SQLite ;
-  `ingest.ts` récupère les matchs flex (`queue_id = 440`) et leur `raw_json`.
+  `ingest.ts` récupère les matchs flex (`queue_id = 440`) et leur `raw_json` (le tag Riot
+  est lu depuis `riotIdTagline`). `syncAssets.ts` télécharge depuis Data Dragon les icônes
+  de profil et de tous les champions présents dans les matchs (alliés et adversaires), et
+  génère leurs noms français dans `src/lib/lol/champion-names.json`.
 - **Base locale observée :** 5 joueurs, 190 matchs : 58 à cinq, 10 à quatre, 3 à trois,
   80 à deux et 39 à un joueur. Le dernier run enregistré a réussi sans nouveau match.
   Ces volumes sont un instantané local, pas des constantes produit.
 - **Schéma :** tables `players`, `matches`, `participants` et `ingest_runs`, définies dans
   `src/lib/db/schema.sql`. La base est `./etoiles.db` par défaut, surchargeable par
   `DATABASE_PATH`, et ignorée par Git.
-- **Tests :** Vitest teste `getOverview()` avec SQLite en mémoire : absence de matchs,
-  exclusion des lineups partiels, série en cours, meilleure série, forme récente et
-  enregistrements incomplets.
-- **Pas encore livré :** historique, fiches joueurs, synergies, endpoints, cron, hébergement
-  Railway configuré ou healthcheck.
+- **Tests :** Vitest teste `getOverview()`, `getMatches()`, `getMatchDetail()` et
+  `getPlayers()` sur SQLite en mémoire, avec des fixtures partagées
+  (`src/lib/stats/fixtures.ts`) : absence de matchs, exclusion des lineups partiels, séries,
+  forme, détail d'un match, identifiants invalides et enregistrements incomplets.
+- **Pas encore livré :** synergies, timeline collective, cron, hébergement Railway configuré
+  ou healthcheck.
 
 **Limite connue de l'ingestion :** un run demande au plus 100 IDs de match par joueur.
 `--backfill` omet `startTime`, mais ne pagine pas au-delà de cette première page ; plusieurs
@@ -65,8 +84,9 @@ objectifs à confirmer, pas un déploiement existant.
 
 ## 1. Contrats produit et techniques
 
-1. Les agrégations et requêtes appartiennent à `src/lib/stats.ts` ; les routes API sérialisent
-   les résultats ; les composants ne contiennent pas de logique métier.
+1. Les agrégations et requêtes appartiennent à `src/lib/stats/` (un module par domaine,
+   réexportés par `index.ts`) ; les routes API sérialisent les résultats ; les composants ne
+   contiennent pas de logique métier.
 2. Toute statistique « équipe » filtre `lineup_size = 5`. Les lineups partiels ont un
    affichage distinct, masqué par défaut.
 3. Endpoints futurs : GET uniquement, paramètres validés, réponses agrégées et réponses vides
@@ -78,8 +98,8 @@ objectifs à confirmer, pas un déploiement existant.
    `prefers-reduced-motion`.
 7. Ajouter de nouvelles colonnes SQLite seulement si les performances l'exigent ; les champs
    détaillés sont déjà conservés dans `raw_json`.
-8. La page expose uniquement l'aperçu du lot 0. Pas de placeholders, composants ou dépendances
-   anticipant des lots futurs.
+8. La page expose uniquement les lots livrés (0 à 2). Pas de placeholders, composants ou
+   dépendances anticipant des lots futurs.
 
 ## 2. Décisions UX et visuelles pour la future interface
 
@@ -121,24 +141,32 @@ sont testés sur SQLite en mémoire, et la page s'adapte aux petits écrans.
 
 ### LOT 1 — Historique des matchs
 
-- Ajouter `getMatches` et `getMatchDetail`, ainsi que les routes GET
-  `/api/matches.json` et `/api/matches/{id}.json`.
-- Présenter les matchs complets, avec un détail consultable et un lien externe sûr
-  (`rel="noopener"`).
-- Afficher les matchs partiels dans une zone distincte, repliée par défaut.
+**État : terminé le 7 novembre 2026.**
 
-**Terminé quand :** chaque match peut être consulté et les matchs partiels n'affectent aucun
-indicateur d'équipe.
+- `getMatches(db, 'full' | 'partial')` et `getMatchDetail(db, id)` dans
+  `src/lib/stats/matches.ts`, exposés par `/api/matches.json?scope=` et
+  `/api/matches/{id}.json`.
+- Section `MatchHistory` : 10 derniers matchs à cinq, les précédents repliés ; matchs
+  partiels (2 à 4 Étoiles) dans une zone distincte, repliée et explicitement exclue des
+  statistiques.
+- Détail en `<dialog>` chargé depuis un fragment serveur, avec lien League of Graphs
+  `rel="noopener noreferrer"`.
+
+**Validé :** chaque match est consultable (API 200/400/404 vérifiées) et les matchs
+partiels n'affectent aucun indicateur d'équipe.
 
 ### LOT 2 — Joueurs et progression
 
-- Calculer fiches joueurs, pools de champions, progression et rôles à partir des matchs
-  pertinents ; ajouter les routes de données nécessaires.
-- Afficher les cinq joueurs sans classement interne humiliant ; ajouter le détail joueur
-  seulement si les données justifient un drill-down.
-- N'ajouter que les graphiques utiles et testés.
+**État : terminé le 7 novembre 2026.**
 
-**Terminé quand :** chaque fiche a des données vérifiées et des insights neutres ou positifs.
+- `getPlayers(db)` dans `src/lib/stats/players.ts`, exposé par `/api/players.json`, calcule
+  sur les seuls matchs à cinq : rôles, pool de champions, moyennes, participation aux kills,
+  part des dégâts, CS et vision par minute, progression et meilleure partie.
+- Section `TeamRoster` : cinq fiches de même structure, ordonnées par rôle et jamais
+  classées entre elles ; la tendance récente n'est soulignée (en or) que lorsqu'elle est
+  positive. Pas de drill-down joueur : la meilleure partie ouvre le détail du match.
+
+**Validé :** fiches testées et vérifiées sur la base réelle ; insights neutres ou positifs.
 
 ### LOT 3 — Récit collectif et synergies
 

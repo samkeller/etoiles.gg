@@ -19,6 +19,7 @@ const streakStart = results.length - streakCount;
 			const isWin = result === 'win';
 			const inStreak = index >= streakStart;
 			return (
+				// TODO: ce composant pourrait être un boutton
 				<li
 					class="flex animate-rise justify-center motion-reduce:animate-none"
 					style={`animation-delay: ${index * 35}ms`}

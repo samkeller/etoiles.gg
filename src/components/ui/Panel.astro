@@ -2,15 +2,16 @@
 import type { HTMLAttributes } from 'astro/types';
 
 interface Props extends HTMLAttributes<'section'> {
+	as?: 'section' | 'article' | 'div';
 	/** Ajoute l'ornement doré Riot au centre du bord supérieur. */
 	divider?: boolean;
 }
 
-const { divider = false, class: className, ...attributes } = Astro.props;
+const { as: Tag = 'section', divider = false, class: className, ...attributes } = Astro.props;
 const corners = ['-top-1 -left-1', '-top-1 -right-1', '-bottom-1 -left-1', '-bottom-1 -right-1'];
 ---
 
-<section
+<Tag
 	class:list={[
 		'relative border border-gold-500/60 bg-night-900/75 shadow-panel backdrop-blur-md',
 		className,
@@ -47,4 +48,4 @@ const corners = ['-top-1 -left-1', '-top-1 -right-1', '-bottom-1 -left-1', '-bot
 	<div class="relative">
 		<slot />
 	</div>
-</section>
+</Tag>

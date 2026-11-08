@@ -1,25 +1,50 @@
 ---
+import MatchHistory from '../components/sections/MatchHistory.astro';
 import TeamOverview from '../components/sections/TeamOverview.astro';
+import TeamRoster from '../components/sections/TeamRoster.astro';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { db } from '../lib/db/db';
-import { getOverview } from '../lib/stats';
+import { getMatches, getOverview, getPlayers } from '../lib/stats';
 
 const overview = getOverview(db);
+const players = getPlayers(db);
+const fullMatches = getMatches(db, 'full');
+const partialMatches = getMatches(db, 'partial');
+const navigation = [
+	{ href: '#team-title', label: 'Équipe' },
+	{ href: '#roster-title', label: 'Joueurs' },
+	{ href: '#history-title', label: 'Historique' },
+];
 ---
 
 <BaseLayout>
-	<div class="mx-auto flex min-h-dvh w-full max-w-6xl flex-col px-4 sm:px-8">
-		<header class="flex items-center justify-between border-b border-gold-700/60 py-5">
-			<a href="/" class="flex items-center gap-3" aria-label="etoiles.gg, accueil">
+	<div class="mx-auto flex min-h-dvh w-full max-w-7xl flex-col px-4 sm:px-8">
+		<header class="flex items-center justify-between gap-6 border-b border-gold-700/60 py-5">
+			<a href="/" class="focus-ring flex items-center gap-3" aria-label="etoiles.gg, accueil">
 				<img src="/favicon/favicon-32x32.png" alt="" width="32" height="32" class="size-7" />
 				<span class="font-display text-xl font-bold tracking-wide text-ink">
 					etoiles<span class="text-gold-200">.gg</span>
 				</span>
 			</a>
+			<nav aria-label="Sections">
+				<ul class="flex gap-5">
+					{
+						navigation.map((item) => (
+							<li>
+								<a href={item.href} class="focus-ring label-caps text-muted transition-colors hover:text-gold-100">
+									{item.label}
+								</a>
+							</li>
+						))
+					}
+				</ul>
+			</nav>
 		</header>
 
-		<main class="flex flex-1 flex-col justify-center py-14 sm:py-20">
+		<main class="flex flex-1 flex-col gap-20 py-14 sm:py-20">
 			<TeamOverview overview={overview} />
+			<TeamRoster players={players} fullMatchCount={overview.matchCount} />
+			<MatchHistory fullMatches={fullMatches} partialMatches={partialMatches} />
 		</main>
 
 		<footer class="border-t border-gold-700/60 py-5 text-xs leading-relaxed text-muted">

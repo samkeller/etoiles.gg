@@ -1,0 +1,20 @@
+---
+interface Props {
+	/** Part entre 0 et 1. */
+	ratio: number;
+	tone?: 'win' | 'loss' | 'neutral';
+	class?: string;
+}
+
+const { ratio, tone = 'neutral', class: className } = Astro.props;
+const width = `${Math.round(Math.min(Math.max(ratio, 0), 1) * 1000) / 10}%`;
+const tones = {
+	win: 'bg-linear-to-r from-gold-500 to-gold-200',
+	loss: 'bg-loss',
+	neutral: 'bg-linear-to-r from-hextech-300/30 to-hextech-300/80',
+};
+---
+
+<span class:list={['block h-1 overflow-hidden bg-night-950/80', className]} aria-hidden="true">
+	<span class:list={['block h-full', tones[tone]]} style={`width: ${width}`}></span>
+</span>

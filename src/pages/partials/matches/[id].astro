@@ -1,0 +1,13 @@
+---
+import MatchDetail from '../../../components/matches/MatchDetail.astro';
+import { db } from '../../../lib/db/db';
+import { getMatchDetail } from '../../../lib/stats';
+
+/** Fragment HTML chargé dans le dialog de l'historique. */
+export const partial = true;
+
+const detail = getMatchDetail(db, Astro.params.id ?? '');
+if (detail === null) return new Response(null, { status: 404 });
+---
+
+<MatchDetail detail={detail} titleId="match-dialog-title" />

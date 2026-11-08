@@ -1,0 +1,35 @@
+---
+import PlayerCard from '../players/PlayerCard.astro';
+import SectionHeading from '../ui/SectionHeading.astro';
+import { pluralize } from '../../lib/format';
+import type { PlayerProfile } from '../../lib/stats';
+
+interface Props {
+	players: readonly PlayerProfile[];
+	fullMatchCount: number;
+}
+
+const { players, fullMatchCount } = Astro.props;
+---
+
+<section aria-labelledby="roster-title">
+	<SectionHeading
+		id="roster-title"
+		eyebrow="La composition"
+		title="Les cinq Étoiles"
+		description={`Chaque fiche se lit pour elle-même, sur les ${pluralize(fullMatchCount, 'match joué', 'matchs joués')} à cinq.`}
+	/>
+	{
+		players.length === 0 ? (
+			<p class="text-muted">Aucun joueur enregistré pour l'instant.</p>
+		) : (
+			<ul class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+				{players.map((player) => (
+					<li>
+						<PlayerCard player={player} />
+					</li>
+				))}
+			</ul>
+		)
+	}
+</section>

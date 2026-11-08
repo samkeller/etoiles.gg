@@ -1,0 +1,17 @@
+---
+interface Props {
+	label: string;
+	value: string;
+	hint?: string;
+}
+
+const { label, value, hint } = Astro.props;
+---
+
+<div class="flex items-baseline justify-between gap-3 py-1.5">
+	<dt class="label-caps text-muted">{label}</dt>
+	<dd class="text-right">
+		<span class="font-display text-lg font-bold tabular-nums text-ink">{value}</span>
+		{hint && <span class="block text-[0.6875rem] tabular-nums text-muted">{hint}</span>}
+	</dd>
+</div>

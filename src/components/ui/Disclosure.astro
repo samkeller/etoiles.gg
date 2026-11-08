@@ -1,0 +1,26 @@
+---
+interface Props {
+	summary: string;
+	/** Précision affichée à droite du libellé. */
+	hint?: string;
+	class?: string;
+}
+
+const { summary, hint, class: className } = Astro.props;
+---
+
+<details class:list={['group', className]}>
+	<summary
+		class="focus-ring flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 transition-colors hover:bg-gold-700/15 [&::-webkit-details-marker]:hidden"
+	>
+		<span class="flex flex-col gap-0.5">
+			<span class="label-caps text-gold-200">{summary}</span>
+			{hint && <span class="text-xs text-muted">{hint}</span>}
+		</span>
+		<span
+			aria-hidden="true"
+			class="size-2 shrink-0 rotate-135 border-t border-r border-gold-500 transition-transform group-open:-rotate-45"
+		></span>
+	</summary>
+	<slot />
+</details>

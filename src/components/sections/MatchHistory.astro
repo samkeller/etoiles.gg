@@ -1,0 +1,148 @@
+---
+import MatchRow from '../matches/MatchRow.astro';
+import Disclosure from '../ui/Disclosure.astro';
+import Panel from '../ui/Panel.astro';
+import SectionHeading from '../ui/SectionHeading.astro';
+import { pluralize } from '../../lib/format';
+import type { MatchSummary } from '../../lib/stats';
+
+interface Props {
+	fullMatches: readonly MatchSummary[];
+	partialMatches: readonly MatchSummary[];
+}
+
+const RECENT_COUNT = 10;
+const { fullMatches, partialMatches } = Astro.props;
+const recent = fullMatches.slice(0, RECENT_COUNT);
+const older = fullMatches.slice(RECENT_COUNT);
+---
+
+<section aria-labelledby="history-title">
+	<SectionHeading
+		id="history-title"
+		eyebrow="Historique"
+		title="Nos matchs à cinq"
+		description="Sélectionnez un match pour afficher sa feuille complète."
+	/>
+
+	<Panel class="py-2">
+		{
+			fullMatches.length === 0 ? (
+				<p class="px-5 py-10 text-center text-muted">Aucun match joué à cinq pour l'instant.</p>
+			) : (
+				<>
+					<ol class="divide-y divide-gold-700/40">
+						{recent.map((match) => (
+							<li>
+								<MatchRow match={match} />
+							</li>
+						))}
+					</ol>
+					{older.length > 0 && (
+						<Disclosure
+							summary={`Afficher ${pluralize(older.length, 'match précédent', 'matchs précédents')}`}
+							class="border-t border-gold-700/40"
+						>
+							<ol class="divide-y divide-gold-700/40 border-t border-gold-700/40">
+								{older.map((match) => (
+									<li>
+										<MatchRow match={match} />
+									</li>
+								))}
+							</ol>
+						</Disclosure>
+					)}
+				</>
+			)
+		}
+	</Panel>
+
+	{
+		partialMatches.length > 0 && (
+			<Disclosure
+				summary={`Matchs partiels · ${partialMatches.length}`}
+				hint="Parties à 2, 3 ou 4 Étoiles. Elles ne comptent dans aucune statistique d'équipe."
+				class="mt-6 border border-dashed border-grey-700 bg-night-950/40"
+			>
+				<ol class="divide-y divide-grey-700/60 border-t border-dashed border-grey-700">
+					{partialMatches.map((match) => (
+						<li>
+							<MatchRow match={match} />
+						</li>
+					))}
+				</ol>
+			</Disclosure>
+		)
+	}
+
+	<dialog
+		id="match-dialog"
+		aria-labelledby="match-dialog-title"
+		class="m-auto max-h-[90dvh] w-[min(60rem,calc(100%-1.5rem))] overflow-visible bg-transparent p-0 text-ink backdrop:bg-night-950/80 backdrop:backdrop-blur-sm"
+	>
+		<Panel as="div" class="px-5 py-6 sm:px-8">
+			<form method="dialog" class="absolute top-0 right-0 z-10">
+				<button
+					type="submit"
+					class="focus-ring grid size-9 place-items-center border border-gold-500/60 bg-night-950 font-display text-xl text-gold-200 transition-colors hover:border-gold-200 hover:text-gold-100"
+					aria-label="Fermer"
+				>
+					×
+				</button>
+			</form>
+			<div data-dialog-body aria-live="polite" class="max-h-[calc(90dvh-4rem)] overflow-y-auto"></div>
+		</Panel>
+	</dialog>
+
+	<template id="match-dialog-loading">
+		<p id="match-dialog-title" class="label-caps animate-pulse py-16 text-center text-muted motion-reduce:animate-none">
+			Chargement du match…
+		</p>
+	</template>
+	<template id="match-dialog-error">
+		<p id="match-dialog-title" class="py-16 text-center text-muted">
+			Ce match n'a pas pu être chargé. Réessayez dans un instant.
+		</p>
+	</template>
+</section>
+
+<script>
+	const dialog = document.querySelector<HTMLDialogElement>('#match-dialog');
+	const body = dialog?.querySelector<HTMLElement>('[data-dialog-body]');
+	const loading = document.querySelector<HTMLTemplateElement>('#match-dialog-loading');
+	const failure = document.querySelector<HTMLTemplateElement>('#match-dialog-error');
+	let pendingId: string | null = null;
+
+	function showTemplate(template: HTMLTemplateElement | null) {
+		if (body && template) body.replaceChildren(template.content.cloneNode(true));
+	}
+
+	async function openMatch(matchId: string) {
+		if (!dialog || !body) return;
+		pendingId = matchId;
+		showTemplate(loading);
+		if (!dialog.open) dialog.showModal();
+
+		try {
+			const response = await fetch(`/partials/matches/${encodeURIComponent(matchId)}`);
+			if (!response.ok) throw new Error(String(response.status));
+			const html = await response.text();
+			if (pendingId === matchId) body.innerHTML = html;
+		} catch {
+			if (pendingId === matchId) showTemplate(failure);
+		}
+	}
+
+	document.addEventListener('click', (event) => {
+		const trigger = (event.target as Element | null)?.closest<HTMLElement>('[data-match-id]');
+		if (trigger?.dataset.matchId) void openMatch(trigger.dataset.matchId);
+	});
+
+	dialog?.addEventListener('click', (event) => {
+		if (event.target === dialog) dialog.close();
+	});
+
+	dialog?.addEventListener('close', () => {
+		pendingId = null;
+	});
+</script>

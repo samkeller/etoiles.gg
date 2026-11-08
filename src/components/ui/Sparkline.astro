@@ -1,0 +1,57 @@
+---
+interface Props {
+	/** Valeurs chronologiques. */
+	values: readonly number[];
+	/** Ligne de référence (ex. moyenne), tracée en pointillés. */
+	baseline?: number | null;
+	class?: string;
+}
+
+const { values, baseline = null, class: className } = Astro.props;
+
+const WIDTH = 200;
+const HEIGHT = 48;
+const PADDING = 4;
+const domain = [...values, ...(baseline === null ? [] : [baseline])];
+const min = Math.min(...domain);
+const max = Math.max(...domain);
+const span = max - min || 1;
+const x = (index: number) => (values.length === 1 ? WIDTH / 2 : (index / (values.length - 1)) * WIDTH);
+const y = (value: number) => PADDING + (1 - (value - min) / span) * (HEIGHT - PADDING * 2);
+const line = values.map((value, index) => `${x(index).toFixed(1)},${y(value).toFixed(1)}`).join(' ');
+const area = `0,${HEIGHT} ${line} ${WIDTH},${HEIGHT}`;
+const gradientId = `spark-${Math.random().toString(36).slice(2, 9)}`;
+---
+
+{
+	values.length > 1 && (
+		<svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} preserveAspectRatio="none" class:list={['overflow-visible', className]} aria-hidden="true">
+			<defs>
+				<linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
+					<stop offset="0%" class="[stop-color:var(--color-hextech-300)] [stop-opacity:0.35]" />
+					<stop offset="100%" class="[stop-color:var(--color-hextech-300)] [stop-opacity:0]" />
+				</linearGradient>
+			</defs>
+			<polygon points={area} fill={`url(#${gradientId})`} />
+			{baseline !== null && (
+				<line
+					x1="0"
+					x2={WIDTH}
+					y1={y(baseline)}
+					y2={y(baseline)}
+					stroke-dasharray="3 4"
+					vector-effect="non-scaling-stroke"
+					class="stroke-grey-300/50"
+				/>
+			)}
+			<polyline
+				points={line}
+				fill="none"
+				stroke-width="1.5"
+				stroke-linejoin="round"
+				vector-effect="non-scaling-stroke"
+				class="stroke-hextech-300"
+			/>
+		</svg>
+	)
+}
