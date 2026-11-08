@@ -5,51 +5,63 @@ import type { MatchSummary } from '../../lib/stats';
 
 interface Props {
 	match: MatchSummary;
+	permalinkOnly?: boolean;
 }
 
-const { match } = Astro.props;
+const { match, permalinkOnly = false } = Astro.props;
 const isWin = match.outcome === 'win';
 const resultLabel = isWin ? 'Victoire' : 'Défaite';
 const isPartial = match.lineupSize < 5;
+const Action = permalinkOnly ? 'a' : 'button';
 ---
 
-<button
-	type="button"
-	data-match-id={match.id}
-	aria-haspopup="dialog"
-	class="group focus-ring relative grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 py-3 pr-4 pl-5 text-left transition-colors hover:bg-gold-700/15 sm:grid-cols-[7rem_8rem_minmax(0,1fr)_7.5rem_1rem]"
->
-	<span
-		aria-hidden="true"
-		class:list={['absolute inset-y-2 left-0 w-1', isWin ? 'bg-win shadow-glow-gold' : 'bg-loss']}
-	></span>
+<div class="flex items-stretch">
+	<Action
+		href={permalinkOnly ? `/matches/${match.id}` : undefined}
+		type={permalinkOnly ? undefined : 'button'}
+		data-match-id={permalinkOnly ? undefined : match.id}
+		aria-haspopup={permalinkOnly ? undefined : 'dialog'}
+		class="group focus-ring relative grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 py-3 pr-3 pl-5 text-left transition-colors hover:bg-white/5 sm:grid-cols-[7rem_8rem_minmax(0,1fr)_7.5rem_1rem]"
+	>
+		<span
+			aria-hidden="true"
+			class:list={['absolute inset-y-2 left-0 w-1', isWin ? 'bg-win shadow-glow-gold' : 'bg-loss']}
+		></span>
 
-	<span class="flex flex-col">
-		<span class:list={['font-display text-lg font-bold uppercase leading-tight', isWin ? 'text-gold-gradient' : 'text-grey-300']}>
-			{resultLabel}
+		<span class="flex flex-col">
+			<span class:list={['font-display text-lg font-bold uppercase leading-tight', isWin ? 'text-gold-gradient' : 'text-grey-300']}>
+				{resultLabel}
+			</span>
+			<span class="text-xs tabular-nums text-muted">{formatDuration(match.durationS)}</span>
 		</span>
-		<span class="text-xs tabular-nums text-muted">{formatDuration(match.durationS)}</span>
-	</span>
 
-	<span class="flex flex-col text-sm max-sm:order-last max-sm:col-span-3">
-		<time datetime={new Date(match.startedAt).toISOString()} class="text-ink">
-			{formatShortDate(match.startedAt)} <span class="text-muted">· {formatTime(match.startedAt)}</span>
-		</time>
-		{isPartial && <span class="label-caps text-muted">{match.lineupSize}/5 Étoiles</span>}
-	</span>
+		<span class="flex flex-col text-sm max-sm:order-last max-sm:col-span-3">
+			<time datetime={new Date(match.startedAt).toISOString()} class="text-ink">
+				{formatShortDate(match.startedAt)} <span class="text-muted">· {formatTime(match.startedAt)}</span>
+			</time>
+			{isPartial && <span class="label-caps text-muted">{match.lineupSize}/5 Étoiles</span>}
+		</span>
 
-	<span class="flex gap-1.5">
-		{match.members.map((member) => <ChampionIcon champion={member.champion} size="md" outcome={match.outcome} />)}
-	</span>
+		<span class="flex gap-1.5">
+			{match.members.map((member) => <ChampionIcon champion={member.champion} size="md" outcome={match.outcome} />)}
+		</span>
 
-	<span class="text-right font-display text-base font-bold tabular-nums text-ink max-sm:hidden">
-		{formatKda(match.kills, match.deaths, match.assists)}
-		<span class="label-caps block font-body text-[0.625rem] text-muted">KDA collectif</span>
-	</span>
+		<span class="text-right font-display text-base font-bold tabular-nums text-ink max-sm:hidden">
+			{formatKda(match.kills, match.deaths, match.assists)}
+			<span class="label-caps block font-body text-[0.625rem] text-muted">KDA collectif</span>
+		</span>
 
-	<span
-		aria-hidden="true"
-		class="size-2 rotate-45 border-t border-r border-gold-500 transition-transform group-hover:translate-x-0.5 group-hover:border-gold-200 max-sm:hidden"
-	></span>
-	<span class="sr-only">Voir le détail du match</span>
-</button>
+		<span
+			aria-hidden="true"
+			class="size-2 rotate-45 border-t border-r border-gold-500 transition-transform group-hover:translate-x-0.5 group-hover:border-gold-200 max-sm:hidden"
+		></span>
+		<span class="sr-only">{permalinkOnly ? 'Ouvrir la page du match' : 'Ouvrir le détail rapide du match'}</span>
+	</Action>
+	{!permalinkOnly && <a
+		href={`/matches/${match.id}`}
+		class="focus-ring grid w-10 shrink-0 place-items-center border-l border-white/10 text-muted transition-colors hover:bg-white/5 hover:text-ink"
+		aria-label={`Ouvrir la page complète du match ${match.id}`}
+	>
+		<span aria-hidden="true">↗</span>
+	</a>}
+</div>

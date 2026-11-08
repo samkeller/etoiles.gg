@@ -21,10 +21,10 @@ describe('getOverview', () => {
 
 	it('counts only complete five-player matches and computes the latest streak', () => {
 		const database = createTestDatabase();
-		addMatch(database, { id: 'old-loss', startedAt: 100, won: false, members: fullLineup() });
-		addMatch(database, { id: 'partial', startedAt: 400, won: true, members: fullLineup().slice(0, 4) });
-		addMatch(database, { id: 'recent-win-1', startedAt: 250, won: true, members: fullLineup() });
-		addMatch(database, { id: 'recent-win-2', startedAt: 300, won: true, members: fullLineup() });
+		addMatch(database, { id: 'EUW1_100', startedAt: 100, won: false, members: fullLineup() });
+		addMatch(database, { id: 'EUW1_400', startedAt: 400, won: true, members: fullLineup().slice(0, 4) });
+		addMatch(database, { id: 'EUW1_250', startedAt: 250, won: true, members: fullLineup() });
+		addMatch(database, { id: 'EUW1_300', startedAt: 300, won: true, members: fullLineup() });
 
 		expect(getOverview(database)).toEqual({
 			matchCount: 3,
@@ -43,7 +43,7 @@ describe('getOverview', () => {
 		const database = createTestDatabase();
 		const results = [true, true, true, false, ...Array.from({ length: RECENT_FORM_SIZE }, (_, i) => i % 2 === 0)];
 		results.forEach((won, index) =>
-			addMatch(database, { id: `match-${index}`, startedAt: index, won, members: fullLineup() }),
+			addMatch(database, { id: `EUW1_${index + 1}`, startedAt: index, won, members: fullLineup() }),
 		);
 
 		const overview = getOverview(database);
@@ -57,8 +57,21 @@ describe('getOverview', () => {
 
 	it('surfaces inconsistent records marked as a full lineup', () => {
 		const database = createTestDatabase();
-		addMatch(database, { id: 'incomplete', startedAt: 100, won: true, members: fullLineup().slice(0, 4), lineupSize: 5 });
+		addMatch(database, { id: 'EUW1_100', startedAt: 100, won: true, members: fullLineup().slice(0, 4), lineupSize: 5 });
 
-		expect(() => getOverview(database)).toThrow('Inconsistent data found in a full-team match.');
+		expect(() => getOverview(database)).toThrow('Inconsistent data found in match EUW1_100.');
+	});
+
+	it('rejects a raw Solo/Duo payload stored as a Flex team match', () => {
+		const database = createTestDatabase();
+		addMatch(database, { id: 'EUW1_100', startedAt: 100, won: true, members: fullLineup() });
+		const row = database.prepare('SELECT raw_json AS rawJson FROM matches WHERE match_id = ?')
+			.get('EUW1_100') as { rawJson: string };
+		const raw = JSON.parse(row.rawJson);
+		raw.info.queueId = 420;
+		database.prepare('UPDATE matches SET raw_json = ? WHERE match_id = ?')
+			.run(JSON.stringify(raw), 'EUW1_100');
+
+		expect(() => getOverview(database)).toThrow('Inconsistent queue in full-team match EUW1_100.');
 	});
 });

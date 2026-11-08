@@ -27,6 +27,7 @@ export interface MatchSummary {
 	id: string;
 	startedAt: number;
 	durationS: number;
+	patch: string;
 	outcome: MatchOutcome;
 	lineupSize: number;
 	/** Totaux des Étoiles présentes. */
@@ -74,9 +75,11 @@ export function getMatches(database: Database.Database, scope: MatchScope = 'ful
 			FROM participants AS p
 			INNER JOIN matches AS m ON m.match_id = p.match_id
 			LEFT JOIN players AS pl ON pl.puuid = p.puuid
-			WHERE EXISTS (SELECT 1 FROM participants AS candidate WHERE candidate.match_id = m.match_id
-				AND candidate.lineup_size BETWEEN ? AND ?)
+			WHERE m.queue_id = 440 AND (
+				EXISTS (SELECT 1 FROM participants AS candidate WHERE candidate.match_id = m.match_id
+					AND candidate.lineup_size BETWEEN ? AND ?)
 				OR (SELECT COUNT(*) FROM participants AS candidate WHERE candidate.match_id = m.match_id) BETWEEN ? AND ?
+			)
 			ORDER BY m.game_start_ts DESC, m.match_id
 		`)
 		.all(minLineup, maxLineup, minLineup, maxLineup) as MemberRow[];
@@ -84,8 +87,10 @@ export function getMatches(database: Database.Database, scope: MatchScope = 'ful
 	const grouped = new Map<string, MemberRow[]>();
 	for (const row of rows) grouped.set(row.id, [...(grouped.get(row.id) ?? []), row]);
 	const rawMatches = database.prepare(`SELECT m.match_id AS id, m.raw_json AS rawJson FROM matches AS m
-		WHERE EXISTS (SELECT 1 FROM participants AS p WHERE p.match_id = m.match_id AND p.lineup_size BETWEEN ? AND ?)
-			OR (SELECT COUNT(*) FROM participants AS p WHERE p.match_id = m.match_id) BETWEEN ? AND ?`)
+		WHERE m.queue_id = 440 AND (
+			EXISTS (SELECT 1 FROM participants AS p WHERE p.match_id = m.match_id AND p.lineup_size BETWEEN ? AND ?)
+			OR (SELECT COUNT(*) FROM participants AS p WHERE p.match_id = m.match_id) BETWEEN ? AND ?
+		)`)
 		.all(minLineup, maxLineup, minLineup, maxLineup) as { id: string; rawJson: string | null }[];
 	const rawById = new Map(rawMatches.map((match) => [match.id, match.rawJson]));
 
@@ -95,14 +100,15 @@ export function getMatches(database: Database.Database, scope: MatchScope = 'ful
 		if (!rawJson || first.startedAt === null || first.durationS === null) {
 			throw new Error(`Missing raw data for match ${first.id}.`);
 		}
-		validatedLineup(database, first.id, rawJson, first.startedAt, first.durationS, members.map((member) => ({
+		const { info } = validatedLineup(database, first.id, rawJson, first.startedAt, first.durationS, members.map((member) => ({
 			...member, role: member.role ?? '',
 		})));
-		return toSummary(members);
+		if (info.queueId !== 440) throw new Error(`Inconsistent queue in full-team match ${first.id}.`);
+		return toSummary(members, info.gameVersion);
 	});
 }
 
-function toSummary(rows: MemberRow[]): MatchSummary {
+function toSummary(rows: MemberRow[], gameVersion: string): MatchSummary {
 	const [first] = rows;
 	const consistent =
 		first.startedAt !== null &&
@@ -129,6 +135,7 @@ function toSummary(rows: MemberRow[]): MatchSummary {
 		id: first.id,
 		startedAt: first.startedAt as number,
 		durationS: first.durationS as number,
+		patch: gameVersion.split('.').slice(0, 2).join('.'),
 		outcome: toOutcome(first.win),
 		lineupSize: rows.length,
 		kills: total('kills'),
@@ -178,6 +185,7 @@ export interface MatchDetail {
 	id: string;
 	startedAt: number;
 	durationS: number;
+	queueId: 420 | 440;
 	outcome: MatchOutcome;
 	lineupSize: number;
 	patch: string;
@@ -195,6 +203,7 @@ export function isMatchId(value: string): boolean {
 interface MatchRow {
 	startedAt: number | null;
 	durationS: number | null;
+	queueId: number;
 	rawJson: string | null;
 }
 
@@ -214,9 +223,10 @@ export function getMatchDetail(database: Database.Database, matchId: string): Ma
 	if (!isMatchId(matchId)) return null;
 
 	const match = database
-		.prepare('SELECT game_start_ts AS startedAt, duration_s AS durationS, raw_json AS rawJson FROM matches WHERE match_id = ?')
+		.prepare('SELECT game_start_ts AS startedAt, duration_s AS durationS, queue_id AS queueId, raw_json AS rawJson FROM matches WHERE match_id = ?')
 		.get(matchId) as MatchRow | undefined;
-	if (!match?.rawJson || match.startedAt === null || match.durationS === null) return null;
+	if (!match?.rawJson || match.startedAt === null || match.durationS === null ||
+		(match.queueId !== 420 && match.queueId !== 440)) return null;
 
 	const members = database
 		.prepare(`
@@ -229,6 +239,7 @@ export function getMatchDetail(database: Database.Database, matchId: string): Ma
 	if (members.length === 0) return null;
 
 	const { info, teamId: ourTeamId } = validatedLineup(database, matchId, match.rawJson, match.startedAt, match.durationS, members);
+	if (info.queueId !== match.queueId) throw new Error(`Inconsistent queue in match ${matchId}.`);
 	const memberNames = new Map(members.map((member) => [member.puuid, member.name]));
 
 	const teamIds = [ourTeamId, ourTeamId === 100 ? 200 : 100] as const;
@@ -238,6 +249,7 @@ export function getMatchDetail(database: Database.Database, matchId: string): Ma
 		id: matchId,
 		startedAt: match.startedAt,
 		durationS: match.durationS,
+		queueId: match.queueId,
 		outcome: toOutcome(members[0].win),
 		lineupSize: members[0].lineupSize,
 		patch: info.gameVersion.split('.').slice(0, 2).join('.'),

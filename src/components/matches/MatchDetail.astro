@@ -72,9 +72,11 @@ const objectives: {
 		<div>
 			<p class="label-caps text-muted">
 				{
-					detail.lineupSize === 5
-						? "Match à cinq"
-						: `Match partiel · ${detail.lineupSize}/5 Étoiles`
+					detail.queueId === 420
+						? 'Classé Solo/Duo'
+						: detail.lineupSize === 5
+							? "Flex · cinq Étoiles"
+							: `Flex · ${detail.lineupSize}/5 Étoiles`
 				}
 			</p>
 			<h2
@@ -121,7 +123,7 @@ const objectives: {
 									: "text-grey-300",
 							]}
 						>
-							{team.isOurs ? "Les Étoiles" : "Adversaires"}
+							{team.isOurs ? (detail.queueId === 420 ? "Équipe alliée" : "Les Étoiles") : "Adversaires"}
 						</span>
 						<span class="label-caps text-muted">
 							Côté {team.side === "blue" ? "bleu" : "rouge"} ·{" "}

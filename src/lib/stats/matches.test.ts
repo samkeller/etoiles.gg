@@ -33,6 +33,12 @@ describe('getMatches', () => {
 		const matches = getMatches(seed(), 'partial');
 
 		expect(matches.map((match) => [match.id, match.lineupSize])).toEqual([['EUW1_300', 3]]);
+		const database = seed();
+		const raw = database.prepare('SELECT raw_json FROM matches WHERE match_id = ?').get('EUW1_400') as { raw_json: string };
+		const solo = JSON.parse(raw.raw_json);
+		solo.info.queueId = 420;
+		database.prepare('UPDATE matches SET queue_id = 420, raw_json = ? WHERE match_id = ?').run(JSON.stringify(solo), 'EUW1_400');
+		expect(getMatches(database, 'partial').map(({ id }) => id)).toEqual(['EUW1_300']);
 	});
 
 	it('returns an empty list without data', () => {
@@ -44,6 +50,17 @@ describe('getMatches', () => {
 		addMatch(database, { id: 'EUW1_1', startedAt: 1, won: true, members: fullLineup().slice(0, 4), lineupSize: 5 });
 
 		expect(() => getMatches(database)).toThrow('Inconsistent data found in match EUW1_1.');
+	});
+
+	it('rejects Solo/Duo data stored in the Flex queue', () => {
+		const database = createTestDatabase();
+		addMatch(database, { id: 'EUW1_1', startedAt: 1, won: true, members: fullLineup() });
+		const row = database.prepare('SELECT raw_json AS rawJson FROM matches WHERE match_id = ?').get('EUW1_1') as { rawJson: string };
+		const raw = JSON.parse(row.rawJson);
+		raw.info.queueId = 420;
+		database.prepare('UPDATE matches SET raw_json = ? WHERE match_id = ?').run(JSON.stringify(raw), 'EUW1_1');
+
+		expect(() => getMatches(database)).toThrow('Inconsistent queue in full-team match EUW1_1.');
 	});
 });
 

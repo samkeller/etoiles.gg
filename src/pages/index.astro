@@ -3,14 +3,13 @@ import MatchHistory from '../components/sections/MatchHistory.astro';
 import TeamOverview from '../components/sections/TeamOverview.astro';
 import TeamRoster from '../components/sections/TeamRoster.astro';
 import TeamCollective from '../components/sections/TeamCollective.astro';
+import SessionConstellation from '../components/memory/SessionConstellation.astro';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { db } from '../lib/db/db';
-import { calculateCollective, getMatches, getOverview, getPlayers } from '../lib/stats';
+import { calculateCollective, getMatches, getOverview, getPlayers, getTeamSessions } from '../lib/stats';
 import { isPosition } from '../lib/lol';
 import type { Position } from '../lib/types';
-import { SITE_NAME } from '../lib/site';
-import { getSyncStatus } from '../lib/sync-status';
-import SyncStatus from '../components/ui/SyncStatus.astro';
+import { TEAM_NAME } from '../lib/site';
 
 const associationRoles: Position[] = [];
 for (const key of ['role', 'role2']) {
@@ -21,60 +20,22 @@ for (const key of ['role', 'role2']) {
 }
 
 const overview = getOverview(db);
-const syncStatus = getSyncStatus(db);
 const players = getPlayers(db);
 const fullMatches = getMatches(db, 'full');
 const partialMatches = getMatches(db, 'partial');
+const sessions = getTeamSessions(fullMatches);
 const collective = calculateCollective(fullMatches, associationRoles);
-const navigation = [
-	{ href: '#team-title', label: 'Équipe' },
-	{ href: '#roster-title', label: 'Joueurs' },
-	{ href: '#history-title', label: 'Historique' },
-	{ href: '#collective-title', label: 'Collectif' },
-];
+const recentMatches = fullMatches.slice(0, overview.recentForm.length).reverse();
 ---
 
-<BaseLayout>
-	<div class="flex min-h-dvh w-full flex-col">
-		<header class="sticky top-0 z-30 w-full border-b border-gold-700/60 bg-night-950">
-			<div class="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-x-6 gap-y-3 px-4 py-4 sm:px-8">
-			<a href="/" class="focus-ring flex items-center gap-3" aria-label={`${SITE_NAME}, accueil`}>
-				<img src="/logo_clean.png" alt="" width="32" height="32" class="size-7" />
-				<span class="font-display text-xl font-bold tracking-wide text-ink">
-					{SITE_NAME}
-				</span>
-			</a>
-			<nav aria-label="Sections">
-				<ul class="flex gap-5">
-					{
-						navigation.map((item) => (
-							<li>
-								<a href={item.href} class="focus-ring label-caps text-muted transition-colors hover:text-gold-100">
-									{item.label}
-								</a>
-							</li>
-						))
-					}
-				</ul>
-			</nav>
-			</div>
-		</header>
-
-		<main class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-20 px-4 py-14 sm:px-8 sm:py-20">
-			<TeamOverview overview={overview} recentMatches={fullMatches.slice(0, overview.recentForm.length).reverse()} />
+<BaseLayout title={`${TEAM_NAME} — le carnet de bord`} description="Les parties, les soirées et les idées des Étoiles de l’Esport. Fait à cinq, pour les cinq.">
+	<main class="flex w-full flex-1 flex-col gap-16 pb-16 sm:gap-24">
+		<TeamOverview overview={overview} recentMatches={recentMatches} latestSession={sessions[0] ?? null} />
+		<div class="mx-auto flex w-full max-w-7xl flex-col gap-16 px-4 sm:gap-24 sm:px-8">
+			<SessionConstellation sessions={sessions} compact />
 			<TeamRoster players={players} />
 			<MatchHistory fullMatches={fullMatches} partialMatches={partialMatches} />
 			<TeamCollective collective={collective} associationRoles={associationRoles} />
-		</main>
-
-		<footer class="mx-auto w-full max-w-7xl px-4 sm:px-8">
-			<SyncStatus status={syncStatus} />
-			<p class="border-t border-gold-700/60 py-5 text-xs leading-relaxed text-muted">
-			{SITE_NAME} n'est pas approuvé par Riot Games et ne reflète pas les opinions de Riot Games ni
-			de quiconque officiellement impliqué dans la production ou la gestion des propriétés de Riot
-			Games. Riot Games et toutes les propriétés associées sont des marques commerciales ou des
-			marques déposées de Riot Games, Inc.
-			</p>
-		</footer>
-	</div>
+		</div>
+	</main>
 </BaseLayout>

@@ -6,6 +6,15 @@ export interface AccountDto {
     tagLine: string;
 }
 
+export interface LeagueEntryDto {
+    queueType: string;
+    tier: string;
+    rank: string;
+    leaguePoints: number;
+    wins: number;
+    losses: number;
+}
+
 export interface ParticipantDto {
     puuid: string;
     teamId: TeamId;

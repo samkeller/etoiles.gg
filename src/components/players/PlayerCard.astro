@@ -35,6 +35,9 @@ const percent = (value: number | null) => (value === null ? '—' : formatPercen
 		<h3 class="mt-4 font-display text-xl font-bold text-ink">{player.name}</h3>
 		{player.tagLine && <p class="text-xs text-muted">#{player.tagLine}</p>}
 	</header>
+	<a href={`/players/${player.puuid}`} class="focus-ring mt-4 inline-flex items-center justify-center gap-2 border-y border-white/10 py-2 text-xs text-muted transition-colors hover:text-ink">
+		Parcours personnel <span aria-hidden="true">↗</span>
+	</a>
 
 	{
 		player.games === 0 ? (

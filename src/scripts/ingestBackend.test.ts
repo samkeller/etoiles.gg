@@ -94,6 +94,91 @@ describe('ingestion', () => {
 		expect(client.getFlexMatchIds).not.toHaveBeenCalled();
 	});
 
+	it('collects Solo/Duo into the individual queue without exposing it to team match lists', async () => {
+		const database = createTestDatabase();
+		addPlayer(database, 'player-0', 'Solo');
+		const solo = raw('EUW1_420');
+		solo.info.queueId = 420;
+		const client = {
+			getFlexMatchIds: vi.fn().mockResolvedValue([]),
+			getRankedMatchIds: vi.fn().mockResolvedValue(['EUW1_420']),
+			getMatch: vi.fn().mockResolvedValue(solo),
+		};
+
+		expect(await ingest(database, client, true)).toMatchObject({ newMatches: 0, failures: [] });
+		expect(client.getRankedMatchIds).toHaveBeenCalledWith('player-0', {
+			start: 0,
+			count: 100,
+			startTime: undefined,
+			queue: 420,
+		});
+		expect(database.prepare('SELECT queue_id AS queueId FROM matches WHERE match_id = ?').get('EUW1_420')).toEqual({ queueId: 420 });
+		expect(database.prepare('SELECT COUNT(*) AS count FROM participants WHERE match_id = ?').get('EUW1_420')).toEqual({ count: 1 });
+		expect(database.prepare('SELECT COUNT(*) AS count FROM individual_ingest_cursors WHERE queue_id = 420').get()).toEqual({ count: 1 });
+		expect(database.prepare('SELECT COUNT(*) AS count FROM matches WHERE queue_id = 440').get()).toEqual({ count: 0 });
+
+		client.getRankedMatchIds.mockResolvedValue([]);
+		client.getMatch.mockClear();
+		expect(await ingest(database, client)).toMatchObject({ newMatches: 0, failures: [] });
+		expect(client.getMatch).not.toHaveBeenCalled();
+	});
+
+	it('starts a new Solo/Duo cursor with only a 24-hour overlap unless backfill is explicit', async () => {
+		const database = createTestDatabase();
+		addPlayer(database, 'player-0', 'Solo');
+		const client = {
+			getFlexMatchIds: vi.fn().mockResolvedValue([]),
+			getRankedMatchIds: vi.fn().mockResolvedValue([]),
+			getMatch: vi.fn(),
+		};
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-11-08T12:00:00Z'));
+		try {
+			await ingest(database, client);
+			expect(client.getRankedMatchIds).toHaveBeenCalledWith('player-0', {
+				start: 0,
+				count: 100,
+				startTime: Math.floor(Date.parse('2026-11-08T12:00:00Z') / 1000) - 24 * 60 * 60,
+				queue: 420,
+			});
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('records both ranked ladders once per player and UTC day, including an unranked queue', async () => {
+		const database = createTestDatabase();
+		addPlayer(database, 'player-0', 'Ranked');
+		const client = {
+			getFlexMatchIds: vi.fn().mockResolvedValue([]),
+			getRankedMatchIds: vi.fn().mockResolvedValue([]),
+			getMatch: vi.fn(),
+			getRankEntries: vi.fn().mockResolvedValue([
+				{ queueType: 'RANKED_SOLO_5x5', tier: 'GOLD', rank: 'II', leaguePoints: 35, wins: 18, losses: 12 },
+				{ queueType: 'RANKED_TFT', tier: 'GOLD', rank: 'II', leaguePoints: 35, wins: 18, losses: 12 },
+			]),
+		};
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-11-08T12:00:00Z'));
+		try {
+			expect((await ingest(database, client)).failures).toEqual([]);
+			expect(database.prepare(`SELECT queue_type AS queueType, tier, division, league_points AS leaguePoints
+				FROM rank_snapshots ORDER BY queue_type`).all()).toEqual([
+				{ queueType: 'RANKED_FLEX_SR', tier: null, division: null, leaguePoints: null },
+				{ queueType: 'RANKED_SOLO_5x5', tier: 'GOLD', division: 'II', leaguePoints: 35 },
+			]);
+			await ingest(database, client);
+			expect(client.getRankEntries).toHaveBeenCalledTimes(1);
+			expect(database.prepare('SELECT COUNT(*) AS count FROM rank_snapshots').get()).toEqual({ count: 2 });
+			vi.setSystemTime(new Date('2026-11-09T12:00:00Z'));
+			await ingest(database, client);
+			expect(client.getRankEntries).toHaveBeenCalledTimes(2);
+			expect(database.prepare('SELECT COUNT(*) AS count FROM rank_snapshots').get()).toEqual({ count: 4 });
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it('paginates backfills and incremental collections and deduplicates IDs', async () => {
 		const database = createTestDatabase();
 		addPlayer(database, 'player-0', 'Original');

@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { migrateDatabase } from '../db/migrations';
 import { SCHEMA } from '../db/schema';
 import type { MatchDto, ParticipantDto, Position, TeamId } from '../types';
 
@@ -7,6 +8,7 @@ const openDatabases: Database.Database[] = [];
 export function createTestDatabase(): Database.Database {
 	const database = new Database(':memory:');
 	database.exec(SCHEMA);
+	migrateDatabase(database);
 	openDatabases.push(database);
 	return database;
 }

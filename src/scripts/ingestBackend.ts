@@ -1,17 +1,21 @@
 import type Database from 'better-sqlite3';
 import type { FlexMatchIdsOptions } from '../lib/riot';
 import type { MatchDto } from '../lib/types';
+import type { LeagueEntryDto } from '../lib/types';
 import { validateMatch } from '../lib/matchValidation';
 import { validatedLineup } from '../lib/stats/shared';
 import { RateLimitError } from '../lib/backendHttp';
 
 interface RiotClient {
 	getFlexMatchIds(puuid: string, options: FlexMatchIdsOptions): Promise<string[]>;
+	getRankedMatchIds?(puuid: string, options: FlexMatchIdsOptions): Promise<string[]>;
 	getMatch(id: string): Promise<MatchDto>;
+	getRankEntries?(puuid: string): Promise<LeagueEntryDto[]>;
 }
 
 export async function ingest(database: Database.Database, client: RiotClient, backfill = false) {
 	const startedAt = Date.now();
+	const capturedOn = new Date(startedAt).toISOString().slice(0, 10);
 	let newMatches = 0;
 	const failures: string[] = [];
 	const players = database.prepare('SELECT puuid FROM players').all() as { puuid: string }[];
@@ -45,6 +49,39 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 				failures.push(message);
 			}
 		}
+		if (client.getRankedMatchIds) {
+			for (const { puuid } of players) {
+				try {
+					const cursor = database.prepare(`SELECT start_time AS startTime FROM individual_ingest_cursors
+						WHERE puuid = ? AND queue_id = 420`).get(puuid) as { startTime: number } | undefined;
+					const pages = new Set<string>();
+					for (let start = 0; ; start += 100) {
+						const ids = await client.getRankedMatchIds(puuid, {
+							start,
+							count: 100,
+							startTime: backfill ? undefined : cursor?.startTime ??
+								Math.max(0, Math.floor(startedAt / 1000) - 24 * 60 * 60),
+							queue: 420,
+						});
+						if (ids.length && ids.every((id) => pages.has(id))) throw new Error('Riot pagination made no progress');
+						database.transaction(() => {
+							for (const id of ids) {
+								enqueue.run(id);
+								pages.add(id);
+							}
+						})();
+						if (ids.length < 100) break;
+					}
+					database.prepare(`INSERT INTO individual_ingest_cursors (puuid, queue_id, start_time) VALUES (?, 420, ?)
+						ON CONFLICT(puuid, queue_id) DO UPDATE SET start_time = excluded.start_time`)
+						.run(puuid, Math.max(0, Math.floor(startedAt / 1000) - 24 * 60 * 60));
+				} catch (error) {
+					const message = `Solo/Duo collection ${puuid}: ${error instanceof Error ? error.message : String(error)}`;
+					if (error instanceof RateLimitError) throw new Error(message);
+					failures.push(message);
+				}
+			}
+		}
 		const pending = database.prepare('SELECT match_id FROM ingest_pending').all() as { match_id: string }[];
 		const remove = database.prepare('DELETE FROM ingest_pending WHERE match_id = ?');
 		for (const { match_id: id } of pending) {
@@ -64,7 +101,7 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 				const match = validateMatch(await client.getMatch(id), id);
 				const { info } = match;
 				const ours = info.participants.filter((participant) => roster.has(participant.puuid));
-				if (info.queueId !== 440 || !ours.length) {
+				if ((info.queueId !== 440 && info.queueId !== 420) || !ours.length) {
 					if (existing) throw new Error('Cannot repair existing match without a flex roster lineup');
 					remove.run(id); continue;
 				}
@@ -85,11 +122,44 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 					}
 					remove.run(id);
 				})();
-				if (!existing && ours.length >= 2) newMatches++;
+				if (!existing && info.queueId === 440 && ours.length >= 2) newMatches++;
 			} catch (error) {
 				const message = `Match ${id}: ${error instanceof Error ? error.message : String(error)}`;
 				if (error instanceof RateLimitError) throw new Error(message);
 				failures.push(message);
+			}
+		}
+		if (client.getRankEntries) {
+			for (const { puuid } of players) {
+				const alreadyCaptured = database.prepare('SELECT 1 FROM rank_snapshots WHERE puuid = ? AND captured_on = ? LIMIT 1')
+					.get(puuid, capturedOn);
+				if (alreadyCaptured) continue;
+				try {
+					const entries = await client.getRankEntries(puuid);
+					const byQueue = new Map(entries.map((entry) => [entry.queueType, entry]));
+					database.transaction(() => {
+						const insert = database.prepare(`INSERT OR IGNORE INTO rank_snapshots
+							(puuid, queue_type, captured_on, tier, division, league_points, wins, losses)
+							VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+						for (const queueType of ['RANKED_SOLO_5x5', 'RANKED_FLEX_SR'] as const) {
+							const entry = byQueue.get(queueType);
+							insert.run(
+								puuid,
+								queueType,
+								capturedOn,
+								entry?.tier ?? null,
+								entry?.rank ?? null,
+								entry?.leaguePoints ?? null,
+								entry?.wins ?? null,
+								entry?.losses ?? null,
+							);
+						}
+					})();
+				} catch (error) {
+					const message = `Rank snapshot ${puuid}: ${error instanceof Error ? error.message : String(error)}`;
+					failures.push(message);
+					if (error instanceof RateLimitError) break;
+				}
 			}
 		}
 	} catch (error) {

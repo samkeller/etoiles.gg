@@ -16,7 +16,7 @@ describe('getCollective', () => {
 	it('returns explicit empty data', () => {
 		expect(getCollective(createTestDatabase())).toEqual({
 			games: 0, winRate: null, minimumGames: 5,
-			associations: [], compositions: [], pendingAssociations: [], pendingCompositions: [],
+			associations: [], compositions: [], pendingAssociations: [], pendingCompositions: [], patches: [],
 		});
 	});
 
@@ -27,6 +27,26 @@ describe('getCollective', () => {
 		const result = getCollective(db);
 		expect(result).toMatchObject({ games: 2, winRate: 0.5 });
 		expect(result).not.toHaveProperty('months');
+	});
+
+	it('groups five-player outcomes by the preserved match patch in patch order', () => {
+		const db = createTestDatabase();
+		for (const [id, version, won] of [
+			['EUW1_1', '16.10.1.1', true],
+			['EUW1_2', '16.9.1.1', false],
+			['EUW1_3', '16.10.1.2', false],
+		] as const) {
+			addMatch(db, { id, startedAt: Number(id.split('_')[1]), won, members: fullLineup() });
+			const row = db.prepare('SELECT raw_json AS rawJson FROM matches WHERE match_id = ?').get(id) as { rawJson: string };
+			const raw = JSON.parse(row.rawJson);
+			raw.info.gameVersion = version;
+			db.prepare('UPDATE matches SET raw_json = ? WHERE match_id = ?').run(JSON.stringify(raw), id);
+		}
+
+		expect(getCollective(db).patches).toEqual([
+			{ patch: '16.9', games: 1, wins: 0, winRate: 0 },
+			{ patch: '16.10', games: 2, wins: 1, winRate: 0.5 },
+		]);
 	});
 
 	it('excludes partial results from the global baseline', () => {

@@ -1,0 +1,68 @@
+---
+import MatchRow from '../components/matches/MatchRow.astro';
+import SessionConstellation from '../components/memory/SessionConstellation.astro';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { db } from '../lib/db/db';
+import { getMatches, getTeamSessions } from '../lib/stats';
+import { formatDate, pluralize } from '../lib/format';
+import { TEAM_NAME } from '../lib/site';
+
+const fullMatches = getMatches(db, 'full');
+const partialMatches = getMatches(db, 'partial');
+const allSessions = getTeamSessions(fullMatches);
+const years = [...new Set(allSessions.map((session) => session.dateKey.slice(0, 4)))];
+const requestedYear = Astro.url.searchParams.get('year') ?? 'all';
+const selectedYear = requestedYear === 'all' || years.includes(requestedYear) ? requestedYear : 'all';
+const sessions = selectedYear === 'all'
+	? allSessions
+	: allSessions.filter((session) => session.dateKey.startsWith(selectedYear));
+const filteredMatchCount = sessions.reduce((count, session) => count + session.matches.length, 0);
+---
+
+<BaseLayout title={`Mémoire des Étoiles — ${TEAM_NAME}`} description="La chronologie des soirées et des matchs joués à cinq par les Étoiles de l’Esport.">
+	<main class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-12 px-4 py-12 sm:px-8 sm:py-16">
+		<header class="max-w-3xl">
+			<p class="label-caps text-sky-300">Se souvenir · Chronologie collective</p>
+			<h1 class="mt-4 font-display text-4xl text-ink sm:text-6xl">Notre ciel, au fil des soirées.</h1>
+			<p class="mt-5 max-w-2xl text-base leading-relaxed text-muted">
+				Une mémoire commune des parties classées Flex jouées à cinq. Les matchs incomplets restent consultables à part et ne changent jamais les statistiques collectives.
+			</p>
+			<p class="mt-5 font-display text-lg text-gold-200">
+				{pluralize(filteredMatchCount, 'match')} dans {pluralize(sessions.length, 'soirée')}
+				{selectedYear !== 'all' && ` · ${selectedYear}`}
+			</p>
+		</header>
+
+		<form method="get" class="flex flex-wrap items-end gap-3 border-y border-white/10 py-4">
+			<label for="year-filter" class="label-caps text-muted">Période</label>
+			<select id="year-filter" name="year" class="focus-ring min-h-10 border border-white/15 bg-night-900 px-3 text-sm text-ink">
+				<option value="all" selected={selectedYear === 'all'}>Toutes les années</option>
+				{years.map((year) => <option value={year} selected={selectedYear === year}>{year}</option>)}
+			</select>
+			<button class="focus-ring min-h-10 border border-sky-300/40 px-4 text-sm text-sky-300 transition-colors hover:bg-sky-300/10" type="submit">Explorer</button>
+		</form>
+
+		<SessionConstellation sessions={sessions} />
+
+		<section aria-labelledby="partial-heading" class="border-t border-dashed border-white/15 pt-8">
+			<p class="label-caps text-muted">Archives à part</p>
+			<h2 id="partial-heading" class="mt-2 font-display text-2xl text-ink">Parties incomplètes</h2>
+			<p class="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
+				{partialMatches.length > 0
+					? `${partialMatches.length} ${partialMatches.length === 1 ? 'match a réuni' : 'matchs ont réuni'} deux à quatre Étoiles. Ils ne sont utilisés dans aucun bilan collectif ni profil d’équipe.`
+					: 'Aucun match incomplet n’est enregistré pour le moment.'}
+			</p>
+			{partialMatches.length > 0 && (
+				<ol class="mt-5 divide-y divide-white/8 border border-dashed border-white/10 bg-night-900/35">
+					{partialMatches.map((match) => <li><MatchRow match={match} permalinkOnly /></li>)}
+				</ol>
+			)}
+		</section>
+
+		{sessions.length > 0 && (
+			<p class="text-xs text-muted">
+				Première soirée archivée : {formatDate(allSessions.at(-1)!.startedAt)}. Les regroupements utilisent une pause de quatre heures comme séparation de session.
+			</p>
+		)}
+	</main>
+</BaseLayout>

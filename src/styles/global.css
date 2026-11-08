@@ -1,63 +1,32 @@
 /*
- * Charte graphique etoiles.win — source unique des tokens.
- * Les tokens @theme génèrent les utilitaires Tailwind (bg-night-900, text-win, font-display…).
- * Aucune couleur ne doit être écrite en dur ailleurs que dans ce fichier.
+ * Charte céleste etoiles.win — palette et typographie partagées.
+ * Les couleurs de l'interface et les animations Tailwind sont définies ici.
  */
 @import "./tailwind.css";
 
-@font-face {
-	font-family: "Beaufort for LoL";
-	src: url("/riot/Fonts_Package/BeaufortForLoL-OTF/BeaufortforLOL-Medium.otf") format("opentype");
-	font-weight: 500;
-	font-display: swap;
-}
-
-@font-face {
-	font-family: "Beaufort for LoL";
-	src: url("/riot/Fonts_Package/BeaufortForLoL-OTF/BeaufortforLOL-Bold.otf") format("opentype");
-	font-weight: 700;
-	font-display: swap;
-}
-
-@font-face {
-	font-family: "Spiegel";
-	src: url("/riot/Fonts_Package/Spiegel-OTF/Spiegel-Regular.otf") format("opentype");
-	font-weight: 400;
-	font-display: swap;
-}
-
-@font-face {
-	font-family: "Spiegel";
-	src: url("/riot/Fonts_Package/Spiegel-OTF/Spiegel-SemiBold.otf") format("opentype");
-	font-weight: 600;
-	font-display: swap;
-}
-
 @theme {
-	--font-display: "Beaufort for LoL", "Times New Roman", serif;
-	--font-body: "Spiegel", "Segoe UI", system-ui, sans-serif;
+	--font-display: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+	--font-body: Inter, "Segoe UI", system-ui, sans-serif;
 
-	/* Palette Hextech */
-	--color-night-950: #010a13;
-	--color-night-900: #091428;
-	--color-night-800: #1e2328;
-	--color-gold-100: #f0e6d2;
-	--color-gold-200: #c8aa6e;
-	--color-gold-300: #c89b3c;
-	--color-gold-500: #785a28;
-	--color-gold-700: #463714;
-	--color-hextech-300: #0ac8b9;
-	--color-grey-300: #a09b8c;
-	--color-grey-700: #3c3c41;
+	--color-night-950: #07111f;
+	--color-night-900: #0e1b2c;
+	--color-night-800: #192a3e;
+	--color-gold-100: #f0eee7;
+	--color-gold-200: #d7c18b;
+	--color-gold-300: #b49961;
+	--color-gold-500: #716142;
+	--color-gold-700: #34445a;
+	--color-hextech-300: #75c9e6;
+	--color-grey-300: #a6b4c5;
+	--color-grey-700: #405168;
 
-	/* Sémantique : l'or est réservé aux victoires et moments positifs */
-	--color-ink: var(--color-gold-100);
-	--color-muted: var(--color-grey-300);
-	--color-win: var(--color-gold-200);
-	--color-loss: #434d52;
+	--color-ink: #e9edf4;
+	--color-muted: #a6b4c5;
+	--color-win: #d7c18b;
+	--color-loss: #6b819a;
 
-	--shadow-panel: 0 30px 80px -20px rgb(0 0 0 / 0.75);
-	--shadow-glow-gold: 0 0 14px rgb(200 155 60 / 0.6);
+	--shadow-panel: 0 28px 80px -24px rgb(1 7 16 / 0.72);
+	--shadow-glow-gold: 0 0 20px rgb(215 193 139 / 0.28);
 
 	--ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 	--animate-ring-draw: ring-draw 1.6s var(--ease-out-expo) both;
@@ -87,12 +56,7 @@
 }
 
 @utility text-gold-gradient {
-	background-image: linear-gradient(
-		180deg,
-		var(--color-gold-100) 10%,
-		var(--color-gold-200) 55%,
-		var(--color-gold-300) 100%
-	);
+	background-image: linear-gradient(180deg, var(--color-gold-100) 10%, var(--color-gold-200) 100%);
 	-webkit-background-clip: text;
 	background-clip: text;
 	color: transparent;
@@ -100,21 +64,56 @@
 
 @utility focus-ring {
 	outline: 2px solid transparent;
-	outline-offset: 2px;
+	outline-offset: 3px;
 
 	&:focus-visible {
-		outline-color: var(--color-gold-200);
+		outline-color: var(--color-hextech-300);
 	}
 }
 
 @layer base {
 	html {
 		color-scheme: dark;
-		scroll-padding-top: 8rem;
+		scroll-padding-top: 6rem;
+		scroll-behavior: smooth;
+		overflow-x: clip;
+	}
+
+	body {
+		background-color: var(--color-night-950);
+		background-image:
+			radial-gradient(ellipse at 68% -12%, rgb(38 80 119 / 0.34), transparent 42%),
+			radial-gradient(ellipse at 4% 48%, rgb(21 48 78 / 0.24), transparent 34%);
+		background-attachment: fixed;
+	}
+
+	body::before {
+		position: fixed;
+		z-index: -1;
+		inset: 0;
+		pointer-events: none;
+		content: "";
+		opacity: 0.48;
+		background-image:
+			radial-gradient(1px 1px at 8% 18%, rgb(240 238 231 / 0.82) 99%, transparent),
+			radial-gradient(1px 1px at 19% 73%, rgb(117 201 230 / 0.68) 99%, transparent),
+			radial-gradient(1px 1px at 31% 31%, rgb(240 238 231 / 0.58) 99%, transparent),
+			radial-gradient(1px 1px at 42% 84%, rgb(215 193 139 / 0.7) 99%, transparent),
+			radial-gradient(1px 1px at 56% 13%, rgb(240 238 231 / 0.7) 99%, transparent),
+			radial-gradient(1px 1px at 67% 55%, rgb(117 201 230 / 0.62) 99%, transparent),
+			radial-gradient(1px 1px at 78% 27%, rgb(240 238 231 / 0.76) 99%, transparent),
+			radial-gradient(1px 1px at 91% 76%, rgb(215 193 139 / 0.68) 99%, transparent);
+		background-size: 440px 340px;
 	}
 
 	::selection {
 		background-color: var(--color-gold-200);
 		color: var(--color-night-950);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		html {
+			scroll-behavior: auto;
+		}
 	}
 }

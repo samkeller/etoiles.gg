@@ -3,46 +3,27 @@ import type { HTMLAttributes } from 'astro/types';
 
 interface Props extends HTMLAttributes<'section'> {
 	as?: 'section' | 'article' | 'div';
-	/** Ajoute l'ornement doré Riot au centre du bord supérieur. */
+	/** Ajoute une étoile discrète au centre du bord supérieur. */
 	divider?: boolean;
 }
 
 const { as: Tag = 'section', divider = false, class: className, ...attributes } = Astro.props;
-const corners = ['-top-1 -left-1', '-top-1 -right-1', '-bottom-1 -left-1', '-bottom-1 -right-1'];
 ---
 
 <Tag
 	class:list={[
-		'relative border border-gold-500/60 bg-night-900/75 shadow-panel backdrop-blur-md',
+		'relative border border-white/10 bg-night-900/65 shadow-panel backdrop-blur-md',
 		className,
 	]}
 	{...attributes}
 >
 	<span
 		aria-hidden="true"
-		class="pointer-events-none absolute inset-1.5 border border-gold-700/50"
+		class="pointer-events-none absolute inset-x-8 -top-px h-px bg-linear-to-r from-transparent via-white/25 to-transparent"
 	></span>
-	<span
-		aria-hidden="true"
-		class="pointer-events-none absolute inset-x-8 -top-px h-px bg-linear-to-r from-transparent via-gold-200 to-transparent"
-	></span>
-	{
-		corners.map((position) => (
-			<span
-				aria-hidden="true"
-				class:list={['pointer-events-none absolute size-2 rotate-45 border border-gold-200 bg-night-950', position]}
-			/>
-		))
-	}
 	{
 		divider && (
-			<img
-				src="/riot/npe-rewards-divider.png"
-				alt=""
-				width="185"
-				height="38"
-				class="pointer-events-none absolute -top-[19px] left-1/2 w-40 -translate-x-1/2 select-none"
-			/>
+			<span aria-hidden="true" class="pointer-events-none absolute -top-2 left-1/2 -translate-x-1/2 bg-night-900 px-2 text-xs text-gold-200">✦</span>
 		)
 	}
 	<div class="relative">

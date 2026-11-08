@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RateLimitError, request } from './backendHttp';
-import { getFlexMatchIds, getMatch, getPuuid, parseRiotId, riotHeaders } from './riot';
+import { getFlexMatchIds, getMatch, getPuuid, getRankEntries, parseRiotId, riotHeaders } from './riot';
 import { addMatch, closeTestDatabases, createTestDatabase, fullLineup } from './stats/fixtures';
 
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); closeTestDatabases(); });
@@ -115,5 +115,24 @@ describe('Riot replies and validation', () => {
 		expect(await getMatch('EUW1_1')).toEqual(match);
 		await expect(getPuuid('name#tag')).rejects.toThrow('Invalid Riot account');
 		await expect(getFlexMatchIds('player', {})).rejects.toThrow('Invalid Riot match list');
+	});
+
+	it('uses the platform League endpoint and validates rank entries', async () => {
+		vi.stubEnv('RIOT_API_KEY', 'RGAPI-00000000-0000-0000-0000-000000000000');
+		vi.stubEnv('RIOT_PLATFORM', 'euw1');
+		const fetch = vi.fn().mockResolvedValueOnce(Response.json([
+			{ queueType: 'RANKED_SOLO_5x5', tier: 'GOLD', rank: 'II', leaguePoints: 35, wins: 18, losses: 12 },
+			{ queueType: 'RANKED_TFT', tier: 'GOLD', rank: 'II', leaguePoints: 35, wins: 18, losses: 12 },
+		]));
+		vi.stubGlobal('fetch', fetch);
+
+		expect(await getRankEntries('player-puuid')).toEqual([
+			{ queueType: 'RANKED_SOLO_5x5', tier: 'GOLD', rank: 'II', leaguePoints: 35, wins: 18, losses: 12 },
+			{ queueType: 'RANKED_TFT', tier: 'GOLD', rank: 'II', leaguePoints: 35, wins: 18, losses: 12 },
+		]);
+		expect(fetch.mock.calls[0][0]).toContain('https://euw1.api.riotgames.com/lol/league/v4/entries/by-puuid/');
+
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(Response.json([{ queueType: 'RANKED_TFT', tier: 3 }])));
+		await expect(getRankEntries('player-puuid')).rejects.toThrow('Invalid Riot league entries response');
 	});
 });

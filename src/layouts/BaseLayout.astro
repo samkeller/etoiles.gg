@@ -1,6 +1,9 @@
 ---
 import '../styles/global.css';
 import { SITE_NAME, TEAM_NAME } from '../lib/site';
+import { db } from '../lib/db/db';
+import { getSyncStatus } from '../lib/sync-status';
+import SyncStatus from '../components/ui/SyncStatus.astro';
 
 interface Props {
 	title?: string;
@@ -9,8 +12,16 @@ interface Props {
 
 const {
 	title = `${TEAM_NAME} — ${SITE_NAME}`,
-	description = `Le carnet de bord de ${TEAM_NAME} : nos matchs joués à cinq.`,
+	description = `Le carnet de bord de ${TEAM_NAME} : comprendre, préparer et se souvenir.`,
 } = Astro.props;
+const path = Astro.url.pathname;
+const navigation = [
+	{ href: '/#team-title', label: 'L’équipe', active: path === '/' },
+	{ href: '/#collective-title', label: 'Le collectif', active: path === '/' && Astro.url.hash === '#collective-title' },
+	{ href: '/history', label: 'Mémoire', active: path.startsWith('/history') },
+	{ href: '/draft', label: 'Laboratoire', active: path.startsWith('/draft') },
+];
+const syncStatus = getSyncStatus(db);
 ---
 
 <!doctype html>
@@ -19,19 +30,66 @@ const {
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="description" content={description} />
+		<meta name="theme-color" content="#07111f" />
 		<meta property="og:type" content="website" />
 		<meta property="og:locale" content="fr_FR" />
 		<meta property="og:site_name" content={SITE_NAME} />
 		<meta property="og:title" content={title} />
 		<meta property="og:description" content={description} />
+		<meta property="og:url" content={`${Astro.url.origin}${path}`} />
 		<title>{title}</title>
 		<link rel="icon" href="/favicon/favicon.ico" sizes="any" />
 		<link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png" />
 		<link rel="apple-touch-icon" href="/favicon/apple-touch-icon.png" />
 	</head>
-	<body
-		class="relative isolate min-h-dvh bg-night-950 font-body text-ink antialiased before:pointer-events-none before:fixed before:inset-0 before:-z-10 before:bg-[url(/riot/background.png)] before:bg-cover before:bg-center before:bg-no-repeat before:content-['']"
-	>
-		<slot />
+	<body class="relative isolate min-h-dvh bg-night-950 font-body text-ink antialiased">
+		<div class="flex min-h-dvh w-full flex-col">
+			<header class="sticky top-0 z-30 border-b border-white/10 bg-night-950/90 backdrop-blur-xl">
+				<div class="mx-auto flex w-full max-w-7xl items-center justify-between gap-5 px-4 py-3 sm:px-8">
+					<a href="/" class="focus-ring flex shrink-0 items-center gap-3" aria-label={`${SITE_NAME}, accueil`}>
+						<svg aria-hidden="true" viewBox="0 0 42 42" class="size-9 text-gold-200">
+							<path d="M21 3.5 24.7 16l12.8 1.2-10.1 7.8 3.3 12.4L21 30.3l-10.7 7.1 3.3-12.4-10.1-7.8L16.3 16 21 3.5Z" fill="none" stroke="currentColor" stroke-width="1.25" />
+							<circle cx="21" cy="21" r="2" fill="currentColor" />
+							<circle cx="5" cy="7" r="1" fill="currentColor" />
+							<circle cx="36" cy="7" r="1" fill="currentColor" />
+						</svg>
+						<span class="flex flex-col leading-none">
+							<span class="font-display text-lg font-semibold tracking-wide text-ink">Étoiles</span>
+							<span class="mt-1 text-[0.6rem] uppercase tracking-[0.22em] text-muted">de l’Esport</span>
+						</span>
+					</a>
+					<nav aria-label="Navigation principale" class="min-w-0 overflow-x-auto">
+						<ul class="flex w-max items-center gap-5 sm:gap-8">
+							{navigation.map((item) => (
+								<li>
+									<a
+										href={item.href}
+										aria-current={item.active ? 'page' : undefined}
+										class:list={[
+											'focus-ring whitespace-nowrap py-3 text-xs font-medium tracking-wide transition-colors sm:text-sm',
+											item.active ? 'text-gold-100' : 'text-muted hover:text-ink',
+										]}
+									>
+										{item.label}
+									</a>
+								</li>
+							))}
+						</ul>
+					</nav>
+				</div>
+			</header>
+
+			<slot />
+
+			<footer class="mt-auto border-t border-white/10 bg-night-950/70">
+				<div class="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-6 sm:px-8">
+					<SyncStatus status={syncStatus} />
+					<p class="max-w-5xl text-xs leading-relaxed text-muted">
+						{SITE_NAME} n'est pas approuvé par Riot Games et ne reflète pas les opinions de Riot Games ni de quiconque officiellement impliqué dans la production ou la gestion des propriétés de Riot Games. Riot Games et toutes les propriétés associées sont des marques commerciales ou des marques déposées de Riot Games, Inc.
+					</p>
+					<p class="label-caps text-[0.6rem] text-grey-300">Fait à cinq, pour les cinq. ✦</p>
+				</div>
+			</footer>
+		</div>
 	</body>
 </html>

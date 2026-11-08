@@ -1,7 +1,7 @@
-# etoiles.win
+# etoiles.win — Fait à cinq, pour les cinq. ✦
 
-Dashboard analytique des **Étoiles de l'Esport**, une équipe de cinq en classé flexible.
-Les statistiques d'équipe ne comptent que les parties disputées avec les cinq joueurs.
+Le carnet de bord privé des **Étoiles de l'Esport** : comprendre les parties, préparer
+la prochaine soirée et garder la mémoire de l'équipe.
 
 ## Démarrer en local
 
@@ -12,75 +12,65 @@ npm ci
 npm run dev
 ```
 
-Le site est servi sur <http://localhost:4321>. La page d'accueil, calculée côté serveur
-depuis SQLite, présente :
+Le site est servi sur <http://localhost:4321>. L'interface est rendue côté serveur depuis
+SQLite et propose plusieurs parcours reliés :
 
-- le bilan des matchs joués à cinq : taux de victoire, forme des 20 derniers matchs, série
-  en cours et meilleure série ;
-- une fiche par joueur : rôle, champions signatures, KDA, participation aux kills, part des
-  dégâts, CS ou vision par minute, courbe d'implication et meilleure partie ;
-- le collectif : associations joueur/champion et compositions à cinq ;
-- l'historique des matchs à cinq, avec le détail de chaque match dans une fenêtre, et à
-  part les matchs partiels (2 à 4 joueurs), qui ne comptent dans aucune statistique.
-  Les listes repliées sont chargées à l'ouverture ; sans JavaScript, leurs liens GET
-  permettent de les consulter (`?history=all` et `?partial=show`).
+| Route | Parcours |
+| --- | --- |
+| `/` | Accueil éditorial, dernière soirée, forme collective, cinq profils et observations de draft |
+| `/history` | Chronologie des soirées à cinq, filtre par année civile et archives séparées des matchs incomplets |
+| `/players/{puuid}` | Historique Solo/Duo et Flex, pool personnel, rang et snapshots; aucun classement entre joueurs |
+| `/draft` | Composer une idée à cinq, explorer les pools et consulter les compositions/associations observées |
+| `/matches/{id}` | URL permanente du récit de match : résultat, patch, composition, statistiques, objectifs et lien externe |
 
-Le nom du site est centralisé dans `src/lib/site.ts` (`SITE_NAME`, actuellement
-`etoiles.win`), séparément du nom de l'équipe (`TEAM_NAME`). Le menu opaque reste visible
-sur toute la largeur de l'écran lors du défilement ; le fond fixe couvre l'écran.
-La forme récente et les meilleures parties ouvrent le même détail de match.
-Ce détail inclut les sorts d'invocateur ; il réutilise les fragments déjà chargés pendant
-la session (maximum 40), annule les requêtes obsolètes, remet le scroll en haut et
-propose « Réessayer » en cas d'échec.
+**Périmètres inviolables :** les statistiques collectives et les compositions observées
+ne consomment que les matchs de la file Flex (`queue 440`) où les cinq joueurs sont
+présents. Les matchs incomplets sont consultables à part. Les statistiques personnelles
+classées lisent exclusivement les files Solo/Duo (`420`) et Flex (`440`) du joueur.
+
+L'identité graphique privilégie le ciel nocturne, les constellations, l'or doux et une
+typographie système; les polices Riot ne sont pas redistribuées. Les icônes de champions,
+de profils et de rôles restent des ressources statiques du jeu. Le boilerplate légal Riot
+reste visible dans le pied de page.
 
 Les données sont aussi exposées en JSON (GET) :
 
 | Route | Contenu |
 | --- | --- |
-| `/api/matches.json?scope=full\|partial` | Liste des matchs (`full` par défaut) |
-| `/api/matches/{id}.json` | Détail d'un match (400 si l'id est invalide, 404 s'il est inconnu) |
-| `/api/players.json` | Fiches des cinq joueurs |
-| `/api/sync.json` | Dernière tentative/réussite, état, file d'attente et planning |
+| `/api/matches.json?scope=full\|partial` | Matchs Flex complets ou partiels |
+| `/api/matches/{id}.json` | Détail de match (400 si l'id est invalide, 404 s'il est inconnu) |
+| `/api/players.json` | Profils collectifs des cinq joueurs |
+| `/api/sync.json` | Fraîcheur, résultats d'ingestion, file d'attente et planning |
 | `/health` | Disponibilité du serveur et de SQLite en lecture/écriture (200 ou 503) |
 
-Le style passe par Tailwind ; les tokens de la charte (couleurs, polices, animations)
-sont définis dans `src/styles/global.css` et les composants réutilisables dans
-`src/components/ui/`. Les agrégations sont dans `src/lib/stats/`.
+Les tokens de la charte sont dans `src/styles/global.css`, les primitives réutilisables dans
+`src/components/ui/` et les agrégations distinctes dans `src/lib/stats/`.
 
-## Lire les observations de draft
+La progression de réalisation, les reports et les limites sont décrits dans
+[`docs/V2 - Roadmap.md`](./docs/V2%20-%20Roadmap.md).
 
-Seules les associations et compositions jouées **au moins 5 fois à cinq** affichent un bilan,
-par taux de victoire décroissant, puis par nombre de matchs en cas d'égalité,
-avec nombre de matchs et bilan V/D. Le trait
-clair sur les barres indique le taux de victoire global de l'équipe.
-À **4/5 matchs**, une zone repliée « Encore un match » montre uniquement l'association
-et son volume : aucun winrate, bilan V/D ou indicateur de performance n'est publié.
-Les essais à moins de quatre matchs restent masqués.
+## Lire les observations et les historiques
 
-Une association identifie deux joueurs avec leurs champions ; une composition complète
-identifie les cinq joueurs, champions et rôles. Les duos de joueurs seuls ne sont pas
-comparés : les cinq étant toujours présents, ils auraient tous le même bilan.
-Les petits échantillons et les associations qui se recoupent ne prouvent pas une synergie
-et ne constituent pas une recommandation de draft. Sans cinq matchs pour une composition,
-un état explicite est affiché.
+Une association décrit deux joueurs avec leurs champions dans le même match à cinq;
+une composition décrit les cinq joueurs, champions et rôles. Seuls les groupes joués
+**au moins 5 fois à cinq** affichent un winrate. Les échantillons plus petits restent
+des volumes descriptifs, jamais une synergie ni une recommandation. Les filtres de rôle
+recalculent l'échantillon sur les rôles observés dans les matchs, sans toucher au bilan
+collectif.
 
-Les synergies peuvent être filtrées sur un rôle (tous les duos qui le contiennent) ou
-deux rôles (ce duo précis). Le bilan et le seuil de 5 matchs sont recalculés sur les
-parties réellement jouées à ces rôles, pas sur le rôle principal ou le dernier rôle du
-joueur. Ce filtre ne modifie pas les compositions complètes ni le bilan global.
-Le formulaire fonctionne sans JavaScript et conserve la sélection dans l'URL
-(`?role=JUNGLE&role2=UTILITY#collective-title`) ; « Réinitialiser » retrouve tous les duos.
-Les sélecteurs utilisent la primitive Tailwind `RoleSelect` : cadre Hextech et icône Riot
-du rôle sélectionné, mise à jour par CSS sans JavaScript. Le contrôle natif conserve
-sa navigation clavier et sa liste système sur mobile.
+Le laboratoire distingue les données de pool personnel (Solo/Duo et Flex classés)
+des observations d'équipe (Flex complet à cinq). Les picks personnels peu joués restent
+des pistes d'exploration. Les associations et compositions affichent leur effectif et
+ne suggèrent pas de causalité. Le détail rapide du match reste disponible sur l'accueil;
+le lien adjacent ouvre son URL permanente.
 
-Les séries de l'aperçu ne portent que sur les matchs à cinq : les résultats partiels ne
-les interrompent pas. Le dernier match de chaque observation ouvre le détail existant.
-Les frises mensuelles et séries collectives retirées de l'interface ne sont plus calculées.
+Les soirées sont regroupées par une pause de quatre heures et datées selon le fuseau
+Europe/Paris. Le filtre de période utilise l'année civile; il ne prétend pas reconstituer
+les saisons compétitives historiques. Le patch est extrait de la version stockée dans
+chaque réponse Match-V5 et comparé dans son ordre numérique.
 
-Le lien externe reste League of Graphs : le lien de détail OP.GG proposé utilise un
-identifiant opaque non disponible dans Match-V5. Ce changement reste explicitement
-bloqué dans `TODO.md`, plutôt que de fournir un lien incorrect.
+Les liens externes de match restent League of Graphs. Aucun identifiant OP.GG n'est
+fabriqué à partir d'un Match-V5.
 
 ## Commandes
 
@@ -92,17 +82,20 @@ bloqué dans `TODO.md`, plutôt que de fournir un lien incorrect.
 | `npm run build` | Construit le site de production |
 | `npm start` | Démarre le serveur Node de production et le planificateur opt-in |
 | `npm run preview` | Prévisualise le build |
-| `npm run ingest` | Lance l'ingestion des matchs flex pour les PUUIDs configurés |
-| `npm run ingest -- --backfill` | Lance l'ingestion complète (sans date de début) des matchs flex pour les PUUIDs configurés |
+| `npm run ingest` | Synchronise les matchs Flex, le Solo/Duo récent et les rangs du jour |
+| `npm run ingest -- --backfill` | Récupère les historiques classés disponibles depuis la fenêtre Match-V5, en respectant les limites Riot |
 | `npm run resolvePuids -- "Pseudo#TAG"` | Résout le PUUID d'un joueur via son Riot ID et l'enregistre en base |
 | `npm run syncAssets` | Télécharge les icônes de profil et de champions (Data Dragon) et génère les noms FR des champions |
 
 ## Fiabilité de la synchronisation
 
 L'ingestion pagine les listes Riot par tranches de 100 IDs, y compris en incrémental.
-Les IDs à traiter sont conservés dans `ingest_pending`. Un curseur par joueur
-(`ingest_cursors`) avec chevauchement de 24 heures couvre les matchs encore en cours
-ou indexés tardivement ; un échec de collecte n'avance pas le curseur.
+Les IDs à traiter sont conservés dans `ingest_pending`. Un curseur par joueur (`ingest_cursors`)
+et un curseur Solo/Duo séparé (`individual_ingest_cursors`) avec chevauchement de 24 heures
+couvrent les matchs encore en cours ou indexés tardivement ; un échec de collecte n'avance
+pas le curseur. Le tout premier run incrémental ne remonte qu'à 24 heures pour le Solo/Duo.
+Utiliser explicitement `--backfill` pour demander les pages plus anciennes; le backfill
+reste reprenable et peut être long.
 Chaque match et ses participants sont écrits dans une transaction.
 Les anciens matchs dont les participants sont incomplets sont aussi remis en file :
 une réparation échouée conserve les données existantes et l'ID à reprendre.
@@ -129,13 +122,16 @@ avec limites de taille et de nombre, et revalidé si son contenu change.
 ## Configuration
 
 Copier `.env.example` vers `.env` et renseigner `RIOT_API_KEY` avant de lancer
-l'ingestion. Ne jamais committer `.env` ni une clé Riot. La base SQLite est stockée
-dans `./etoiles.db` par défaut (chemin configurable avec `DATABASE_PATH`), fichier ignoré
-par Git.
+l'ingestion. `RIOT_PLATFORM` détermine le serveur League-V4 pour les rangs (`euw1` par
+défaut; ce projet conserve des matchs EUW1). Ne jamais committer `.env` ni une clé Riot.
+La base SQLite est stockée dans `./etoiles.db` par défaut (chemin configurable avec
+`DATABASE_PATH`), fichier ignoré par Git.
 
-Le schéma SQL est défini une seule fois dans `src/lib/db/schema.ts`, partagé par l'app,
-les scripts et les fixtures. Il est inclus dans le bundle de production et ne dépend
-pas d'un fichier SQL à côté des chunks compilés.
+Le schéma SQL de base est défini dans `src/lib/db/schema.ts`; les évolutions additives,
+versionnées et transactionnelles sont dans `src/lib/db/migrations.ts`. La migration V2
+ajoute les curseurs Solo/Duo et snapshots de rang sans supprimer les données existantes.
+Un snapshot par joueur, file et jour UTC est écrit lors de l'ingestion; les rangs absents
+sont conservés comme « non classé », et aucun historique antérieur n'est inventé.
 
 ## Déployer sur Railway
 

@@ -2,6 +2,7 @@ import 'dotenv/config';
 import Database from 'better-sqlite3';
 import { existsSync, mkdirSync, realpathSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
+import { migrateDatabase } from './migrations';
 import { SCHEMA } from './schema';
 
 export function openDatabase(path = process.env.DATABASE_PATH ?? './etoiles.db'): Database.Database {
@@ -31,6 +32,7 @@ export function openDatabase(path = process.env.DATABASE_PATH ?? './etoiles.db')
 		database.pragma('busy_timeout = 5000');
 		database.pragma('journal_mode = WAL');
 		database.exec(SCHEMA);
+		migrateDatabase(database);
 		const columns = database.pragma('table_info(ingest_runs)') as { name: string }[];
 		if (!columns.some(column => column.name === 'finished_at')) {
 			database.exec('ALTER TABLE ingest_runs ADD COLUMN finished_at INTEGER');

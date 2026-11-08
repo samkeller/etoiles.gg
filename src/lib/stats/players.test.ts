@@ -102,4 +102,18 @@ describe('getPlayers', () => {
 
 		expect(() => getPlayers(database)).toThrow('Missing raw data for full-team match EUW1_1.');
 	});
+
+	it('rejects Solo/Duo payloads stored in the Flex queue', () => {
+		const database = createTestDatabase();
+		addPlayer(database, 'player-0', 'Liberticide');
+		addMatch(database, { id: 'EUW1_1', startedAt: 1, won: true, members: fullLineup() });
+		const row = database.prepare('SELECT raw_json AS rawJson FROM matches WHERE match_id = ?')
+			.get('EUW1_1') as { rawJson: string };
+		const raw = JSON.parse(row.rawJson);
+		raw.info.queueId = 420;
+		database.prepare('UPDATE matches SET raw_json = ? WHERE match_id = ?')
+			.run(JSON.stringify(raw), 'EUW1_1');
+
+		expect(() => getPlayers(database)).toThrow('Inconsistent queue in full-team match EUW1_1.');
+	});
 });

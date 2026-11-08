@@ -19,6 +19,13 @@ export interface DraftObservation {
 	latestMatchId: string;
 }
 
+export interface PatchObservation {
+	patch: string;
+	games: number;
+	wins: number;
+	winRate: number;
+}
+
 export interface TeamCollective {
 	games: number;
 	winRate: number | null;
@@ -27,6 +34,7 @@ export interface TeamCollective {
 	compositions: DraftObservation[];
 	pendingAssociations: PendingDraftObservation[];
 	pendingCompositions: PendingDraftObservation[];
+	patches: PatchObservation[];
 }
 
 interface DraftGroup {
@@ -88,6 +96,16 @@ function pendingObservations(groups: Map<string, DraftGroup>): PendingDraftObser
 		}));
 }
 
+function comparePatches(left: string, right: string): number {
+	const leftParts = left.split('.').map(Number);
+	const rightParts = right.split('.').map(Number);
+	for (let index = 0; index < Math.max(leftParts.length, rightParts.length); index += 1) {
+		const difference = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
+		if (difference) return difference;
+	}
+	return left.localeCompare(right);
+}
+
 export function getCollective(database: Database.Database, associationRoles: readonly Position[] = []): TeamCollective {
 	return calculateCollective(getMatches(database), associationRoles);
 }
@@ -98,10 +116,15 @@ export function calculateCollective(fullMatches: readonly MatchSummary[], associ
 	const matches = [...fullMatches].sort((left, right) => left.startedAt - right.startedAt || left.id.localeCompare(right.id));
 	const associations = new Map<string, DraftGroup>();
 	const compositions = new Map<string, DraftGroup>();
+	const patchGroups = new Map<string, { games: number; wins: number }>();
 	let wins = 0;
 
 	for (const match of matches) {
 		if (match.outcome === 'win') wins += 1;
+		const patch = patchGroups.get(match.patch) ?? { games: 0, wins: 0 };
+		patch.games += 1;
+		patch.wins += Number(match.outcome === 'win');
+		patchGroups.set(match.patch, patch);
 
 		for (let left = 0; left < match.members.length; left += 1) {
 			for (let right = left + 1; right < match.members.length; right += 1) {
@@ -121,5 +144,10 @@ export function calculateCollective(fullMatches: readonly MatchSummary[], associ
 		compositions: observations(compositions),
 		pendingAssociations: pendingObservations(associations),
 		pendingCompositions: pendingObservations(compositions),
+		patches: [...patchGroups].map(([patch, result]) => ({
+			patch,
+			...result,
+			winRate: result.wins / result.games,
+		})).sort((left, right) => comparePatches(left.patch, right.patch)),
 	};
 }

@@ -1,0 +1,361 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import SectionHeading from '../components/ui/SectionHeading.astro';
+import { db } from '../lib/db/db';
+import { getIndividualProfiles, getMatches, getPlayers, MIN_DRAFT_GAMES } from '../lib/stats';
+import { roleLabel } from '../lib/lol';
+import type { Position } from '../lib/types';
+import championNames from '../lib/lol/champion-names.json';
+
+const positions: Position[] = ['TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM', 'UTILITY'];
+const players = getPlayers(db);
+const individualProfiles = getIndividualProfiles(db);
+const fullMatches = getMatches(db, 'full');
+const usedPlayers = new Set<string>();
+const slots = positions.map((role) => {
+	const profile = players.find((player) => player.mainRole === role && !usedPlayers.has(player.puuid))
+		?? players.find((player) => !usedPlayers.has(player.puuid));
+	if (profile) usedPlayers.add(profile.puuid);
+	return { role, playerId: profile?.puuid ?? '' };
+});
+
+const playerOptions = players.map((player) => ({ puuid: player.puuid, name: player.name }));
+const championOptions = Object.entries(championNames)
+	.map(([id, name]) => ({ id, name }))
+	.sort((left, right) => left.name.localeCompare(right.name, 'fr'));
+const personalPools = individualProfiles.map((profile) => {
+	const champions = new Map<string, {
+		games: number;
+		wins: number;
+		lastPlayedAt: number;
+		soloDuoGames: number;
+		flexGames: number;
+		roles: Record<string, number>;
+	}>();
+	for (const [queue, activity] of [['soloDuo', profile.soloDuo], ['flex', profile.flex]] as const) {
+		for (const champion of activity.champions) {
+			const record = champions.get(champion.champion) ?? {
+				games: 0,
+				wins: 0,
+				lastPlayedAt: champion.lastPlayedAt,
+				soloDuoGames: 0,
+				flexGames: 0,
+				roles: {},
+			};
+			record.games += champion.games;
+			record.wins += champion.wins;
+			record.lastPlayedAt = Math.max(record.lastPlayedAt, champion.lastPlayedAt);
+			record[queue === 'soloDuo' ? 'soloDuoGames' : 'flexGames'] += champion.games;
+			for (const role of champion.roles) record.roles[role.role] = (record.roles[role.role] ?? 0) + role.games;
+			champions.set(champion.champion, record);
+		}
+	}
+	return {
+		puuid: profile.puuid,
+		name: profile.name,
+		champions: Object.fromEntries(champions),
+	};
+});
+const matchObservations = fullMatches.map((match) => ({
+	id: match.id,
+	startedAt: match.startedAt,
+	outcome: match.outcome,
+	members: match.members.map(({ puuid, champion, role }) => ({ puuid, champion, role })),
+}));
+const safeDraftData = JSON.stringify({ players: playerOptions, pools: personalPools, matches: matchObservations, minimumGames: MIN_DRAFT_GAMES })
+	.replaceAll('<', '\\u003c').replaceAll('>', '\\u003e').replaceAll('&', '\\u0026');
+---
+
+<BaseLayout title="Laboratoire de draft — etoiles.win" description="Préparer librement une composition avec les Étoiles, en explorant les pools personnels et l’historique à cinq.">
+	<main class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-10 px-4 py-10 sm:px-8 sm:py-14">
+		<header class="max-w-3xl">
+			<p class="label-caps text-sky-300">Préparer · Laboratoire de draft</p>
+			<h1 class="mt-4 font-display text-4xl text-ink sm:text-6xl">Et si on essayait…</h1>
+			<p class="mt-5 max-w-2xl text-base leading-relaxed text-muted">
+				Composer une idée à cinq, regarder ce que chacun a déjà joué et confronter la composition à notre historique. Ce labo donne des repères, jamais des consignes.
+			</p>
+			<p class="mt-3 text-xs leading-relaxed text-muted">
+				Les parties réelles et les associations observées sont séparées des idées exploratoires. Un historique ne prouve pas une synergie ni ne prédit une victoire.
+			</p>
+		</header>
+
+		<div class="grid items-start gap-8 xl:grid-cols-[minmax(0,1.3fr)_minmax(19rem,0.7fr)]">
+			<form id="draft-form" class="min-w-0">
+				<div class="mb-5 flex flex-wrap items-end justify-between gap-4">
+					<div>
+						<p class="label-caps text-muted">Une place par rôle</p>
+						<h2 class="mt-2 font-display text-2xl text-ink">Les cinq postes</h2>
+					</div>
+					<button type="reset" class="focus-ring border-b border-white/15 pb-1 text-xs text-muted transition-colors hover:text-ink">Réinitialiser</button>
+				</div>
+				<ol class="space-y-3">
+					{slots.map((slot, index) => (
+						<li data-draft-slot class="border border-white/10 bg-night-900/60 p-4 sm:p-5">
+							<div class="flex flex-wrap items-center justify-between gap-3">
+								<p class="flex items-center gap-2 font-display text-lg text-ink">
+									<span class="text-gold-200" aria-hidden="true">✦</span>{roleLabel(slot.role)}
+								</p>
+								<img data-champion-image alt="" width="40" height="40" class="hidden size-10 border border-white/15 object-cover" />
+							</div>
+							<div class="mt-4 grid gap-3 md:grid-cols-3">
+								<label class="flex min-w-0 flex-col gap-2 text-xs text-muted">
+									Joueur
+									<select data-player-select class="focus-ring min-h-11 w-full min-w-0 border border-white/15 bg-night-950 px-3 text-sm text-ink">
+										<option value="">Choisir un joueur</option>
+										{playerOptions.map((player) => <option value={player.puuid} selected={slot.playerId === player.puuid}>{player.name}</option>)}
+									</select>
+								</label>
+								<label class="flex min-w-0 flex-col gap-2 text-xs text-muted">
+									Rôle
+									<select data-role-select class="focus-ring min-h-11 w-full min-w-0 border border-white/15 bg-night-950 px-3 text-sm text-ink">
+										{positions.map((role) => <option value={role} selected={slot.role === role}>{roleLabel(role)}</option>)}
+									</select>
+								</label>
+								<label class="flex min-w-0 flex-col gap-2 text-xs text-muted">
+									Champion
+									<select data-champion-select class="focus-ring min-h-11 w-full min-w-0 border border-white/15 bg-night-950 px-3 text-sm text-ink">
+										<option value="">Choisir un champion</option>
+										{championOptions.map((champion) => <option value={champion.id}>{champion.name}</option>)}
+									</select>
+								</label>
+							</div>
+							<div data-pool-hint class="mt-3 min-h-5 text-xs leading-relaxed text-muted">
+								{index === 0 ? 'Pool classé personnel et fréquence au rôle sélectionné, lorsque l’historique existe.' : ''}
+							</div>
+							<div data-pool-suggestions class="mt-2 flex flex-wrap gap-2"></div>
+						</li>
+					))}
+				</ol>
+				<p id="draft-validation" aria-live="polite" class="mt-4 min-h-5 text-sm text-muted"></p>
+				<button id="analyze-draft" type="button" disabled class="focus-ring mt-3 min-h-12 border border-gold-200/45 px-5 text-sm text-gold-100 transition-colors enabled:hover:bg-gold-200/10 disabled:cursor-not-allowed disabled:opacity-45">
+					Explorer cette idée <span aria-hidden="true">↗</span>
+				</button>
+				<noscript><p class="mt-4 text-sm text-muted">Activez JavaScript pour comparer cette idée aux historiques et aux compositions observées.</p></noscript>
+			</form>
+
+			<aside class="xl:sticky xl:top-24">
+				<SectionHeading id="draft-data-heading" eyebrow="Données observées" title="Ce que raconte l’historique" />
+				<div class="mt-5 space-y-4">
+					<section aria-labelledby="composition-history-title" class="border border-white/10 bg-night-900/60 p-5 sm:p-6">
+						<h2 id="composition-history-title" class="font-display text-xl text-ink">Composition exacte</h2>
+						<p id="composition-state" aria-live="polite" class="mt-3 text-sm leading-relaxed text-muted">
+							Choisissez cinq joueurs, cinq rôles et cinq champions pour consulter les matchs identiques déjà joués ensemble.
+						</p>
+					</section>
+					<section aria-labelledby="pair-history-title" class="border border-white/10 bg-night-900/60 p-5 sm:p-6">
+						<h2 id="pair-history-title" class="font-display text-xl text-ink">Picks associés</h2>
+						<p class="mt-2 text-xs leading-relaxed text-muted">
+							Association observée à cinq uniquement. Les petits échantillons restent descriptifs; aucune causalité n’est déduite.
+						</p>
+						<ul id="pair-observations" class="mt-4 space-y-3 text-sm text-muted"></ul>
+					</section>
+					<p class="border-l border-sky-300/30 py-2 pl-4 text-xs leading-relaxed text-muted">
+						Les pools et habitudes affichés reposent sur les parties classées personnelles enregistrées. Les compositions et associations reposent exclusivement sur les matchs Flex joués à cinq.
+					</p>
+				</div>
+			</aside>
+		</div>
+	</main>
+	<script type="application/json" id="draft-data" set:html={safeDraftData}></script>
+	<script>
+		interface DraftPlayer {
+			puuid: string;
+			name: string;
+			champions: Record<string, {
+				games: number;
+				wins: number;
+				lastPlayedAt: number;
+				soloDuoGames: number;
+				flexGames: number;
+				roles: Record<string, number>;
+			}>;
+		}
+		interface DraftMember {
+			puuid: string;
+			champion: string;
+			role: string | null;
+		}
+		interface DraftMatch {
+			id: string;
+			startedAt: number;
+			outcome: 'win' | 'loss';
+			members: DraftMember[];
+		}
+		interface DraftData {
+			players: Pick<DraftPlayer, 'puuid' | 'name'>[];
+			pools: DraftPlayer[];
+			matches: DraftMatch[];
+			minimumGames: number;
+		}
+
+		const dataElement = document.querySelector<HTMLScriptElement>('#draft-data');
+		const form = document.querySelector<HTMLFormElement>('#draft-form');
+		const analyzeButton = document.querySelector<HTMLButtonElement>('#analyze-draft');
+		const validation = document.querySelector<HTMLElement>('#draft-validation');
+		const compositionState = document.querySelector<HTMLElement>('#composition-state');
+		const pairList = document.querySelector<HTMLUListElement>('#pair-observations');
+		if (!dataElement || !form || !analyzeButton || !validation || !compositionState || !pairList) {
+			throw new Error('Draft lab markup is incomplete.');
+		}
+		const activeForm = form;
+		const analyzeAction = analyzeButton;
+		const validationMessage = validation;
+		const compositionResult = compositionState;
+		const pairObservations = pairList;
+		const data = JSON.parse(dataElement.textContent ?? '') as DraftData;
+		const slots = [...activeForm.querySelectorAll<HTMLElement>('[data-draft-slot]')].map((element) => ({
+			element,
+			player: element.querySelector<HTMLSelectElement>('[data-player-select]')!,
+			role: element.querySelector<HTMLSelectElement>('[data-role-select]')!,
+			champion: element.querySelector<HTMLSelectElement>('[data-champion-select]')!,
+			hint: element.querySelector<HTMLElement>('[data-pool-hint]')!,
+			suggestions: element.querySelector<HTMLElement>('[data-pool-suggestions]')!,
+			image: element.querySelector<HTMLImageElement>('[data-champion-image]')!,
+		}));
+		const pools = new Map(data.pools.map((player) => [player.puuid, player]));
+		const names = new Map(data.players.map((player) => [player.puuid, player.name]));
+		const championLabels = new Map<string, string>(
+			[...form.querySelectorAll<HTMLOptionElement>('[data-champion-select] option')]
+				.filter((option) => option.value)
+				.map((option) => [option.value, option.textContent ?? option.value]),
+		);
+		const formatDate = (timestamp: number) => new Intl.DateTimeFormat('fr-FR', {
+			day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/Paris',
+		}).format(new Date(timestamp));
+		const plural = (count: number, singular: string, pluralForm = `${singular}s`) =>
+			`${count} ${count === 1 ? singular : pluralForm}`;
+		const compositionKey = (members: DraftMember[]) => JSON.stringify(
+			members.slice().sort((left, right) => left.puuid.localeCompare(right.puuid))
+				.map((member) => [member.puuid, member.champion, member.role]),
+		);
+
+		function describePool(slot: typeof slots[number]) {
+			const player = pools.get(slot.player.value);
+			const champion = player?.champions[slot.champion.value];
+			const roleGames = champion?.roles[slot.role.value] ?? 0;
+			slot.suggestions.replaceChildren();
+			if (slot.champion.value) {
+				if (champion) {
+					slot.hint.textContent = `${plural(champion.games, 'partie classée')} observée${champion.games === 1 ? '' : 's'} avec ${champion.wins} victoire${champion.wins === 1 ? '' : 's'} · dernière utilisation ${formatDate(champion.lastPlayedAt)}.`;
+					const roleHint = roleGames > 0
+						? `${plural(roleGames, 'partie')} sur ${slot.role.options[slot.role.selectedIndex]?.textContent?.toLowerCase()}`
+						: `pas de partie enregistrée sur ${slot.role.options[slot.role.selectedIndex]?.textContent?.toLowerCase()}`;
+					slot.hint.textContent += ` ${roleHint}.`;
+					slot.hint.dataset.sample = String(champion.games);
+				} else {
+					slot.hint.textContent = 'Aucune partie classée de ce joueur avec ce champion dans l’historique disponible. Choix exploratoire.';
+					delete slot.hint.dataset.sample;
+				}
+			} else if (player) {
+				const known = Object.entries(player.champions)
+					.sort((left, right) => right[1].games - left[1].games || left[0].localeCompare(right[0]))
+					.slice(0, 3);
+				slot.hint.textContent = known.length
+					? 'Picks fréquents observés dans son historique classé :'
+					: 'Aucun historique classé enregistré pour ce joueur. Tous les choix sont exploratoires.';
+				for (const [championId, record] of known) {
+					const suggestion = document.createElement('button');
+					suggestion.type = 'button';
+					suggestion.className = 'focus-ring inline-flex items-center gap-2 border border-white/10 px-2 py-1 text-xs text-muted transition-colors hover:border-sky-300/50 hover:text-ink';
+					suggestion.dataset.suggestChampion = championId;
+					suggestion.textContent = `${championLabels.get(championId) ?? championId} · ${record.games}`;
+					slot.suggestions.append(suggestion);
+				}
+			} else {
+				slot.hint.textContent = 'Choisissez un joueur pour explorer son pool personnel.';
+			}
+			if (slot.champion.value) {
+				slot.image.src = `/riot/champions/${encodeURIComponent(slot.champion.value)}.png`;
+				slot.image.classList.remove('hidden');
+			} else {
+				slot.image.removeAttribute('src');
+				slot.image.classList.add('hidden');
+			}
+		}
+
+		function currentMembers(): DraftMember[] {
+			return slots.map((slot) => ({
+				puuid: slot.player.value,
+				champion: slot.champion.value,
+				role: slot.role.value,
+			}));
+		}
+
+		function validateDraft(): boolean {
+			const members = currentMembers();
+			const ready = members.every((member) => member.puuid && member.champion) &&
+				new Set(members.map((member) => member.puuid)).size === 5 &&
+				new Set(members.map((member) => member.role)).size === 5 &&
+				new Set(members.map((member) => member.champion)).size === 5;
+			const hints = [];
+			if (new Set(members.map((member) => member.puuid)).size < 5) hints.push('Chaque joueur doit occuper une seule place.');
+			if (new Set(members.map((member) => member.role)).size < 5) hints.push('Attribuez un rôle différent à chaque place.');
+			if (new Set(members.map((member) => member.champion)).size < 5) hints.push('Un champion ne peut être choisi qu’une fois.');
+			validationMessage.textContent = ready ? 'Composition complète : l’exploration n’est pas une recommandation de draft.' :
+				hints.join(' ') || 'Choisissez un joueur et un champion pour chacune des cinq places.';
+			analyzeAction.disabled = !ready;
+			for (const slot of slots) describePool(slot);
+			return ready;
+		}
+
+		function analyze() {
+			if (!validateDraft()) return;
+			const members = currentMembers();
+			const key = compositionKey(members);
+			const exact = data.matches.filter((match) => compositionKey(match.members) === key);
+			const wins = exact.filter((match) => match.outcome === 'win').length;
+			if (exact.length >= data.minimumGames) {
+				compositionResult.textContent = `${wins} victoire${wins === 1 ? '' : 's'} sur ${exact.length} matchs à cinq (${new Intl.NumberFormat('fr-FR', { style: 'percent', maximumFractionDigits: 0 }).format(wins / exact.length)}). Historique observé, pas une prédiction.`;
+			} else if (exact.length > 0) {
+				compositionResult.textContent = `${plural(exact.length, 'match')} identique${exact.length === 1 ? '' : 's'} dans l’historique à cinq. Échantillon trop court pour afficher un bilan; ce n’est pas une synergie validée.`;
+			} else {
+				compositionResult.textContent = 'Aucune partie identique retrouvée parmi les matchs joués à cinq. Composition nouvelle pour l’historique disponible; idée exploratoire.';
+			}
+
+			const pairs = [];
+			for (let left = 0; left < members.length; left += 1) {
+				for (let right = left + 1; right < members.length; right += 1) {
+					const pair = [members[left], members[right]].sort((a, b) => a.puuid.localeCompare(b.puuid));
+					const matches = data.matches.filter((match) => pair.every((member) =>
+						match.members.some((candidate) => candidate.puuid === member.puuid && candidate.champion === member.champion),
+					));
+					if (matches.length) pairs.push({ pair, matches });
+				}
+			}
+			pairObservations.replaceChildren();
+			if (!pairs.length) {
+				const empty = document.createElement('li');
+				empty.textContent = 'Aucune association de ces picks dans les matchs archivés à cinq.';
+				pairObservations.append(empty);
+				return;
+			}
+			for (const { pair, matches } of pairs.sort((a, b) => b.matches.length - a.matches.length)) {
+				const item = document.createElement('li');
+				item.className = 'border-t border-white/10 pt-3';
+				const players = pair.map((member) => `${names.get(member.puuid) ?? 'Étoile'} · ${championLabels.get(member.champion) ?? member.champion}`).join(' + ');
+				if (matches.length >= data.minimumGames) {
+					const pairWins = matches.filter((match) => match.outcome === 'win').length;
+					item.textContent = `${players} — ${pairWins}/${matches.length} victoires (${new Intl.NumberFormat('fr-FR', { style: 'percent', maximumFractionDigits: 0 }).format(pairWins / matches.length)}), sur ${matches.length} parties. Association observée seulement.`;
+				} else {
+					item.textContent = `${players} — ${plural(matches.length, 'partie')} observée${matches.length === 1 ? '' : 's'}; échantillon trop court pour un bilan.`;
+				}
+				pairObservations.append(item);
+			}
+		}
+
+		activeForm.addEventListener('change', validateDraft);
+		activeForm.addEventListener('reset', () => requestAnimationFrame(validateDraft));
+		activeForm.addEventListener('click', (event) => {
+			if (!(event.target instanceof Element)) return;
+			const suggestion = event.target.closest<HTMLButtonElement>('[data-suggest-champion]');
+			if (!suggestion) return;
+			const slot = suggestion.closest<HTMLElement>('[data-draft-slot]');
+			const select = slot?.querySelector<HTMLSelectElement>('[data-champion-select]');
+			if (!select) return;
+			select.value = suggestion.dataset.suggestChampion ?? '';
+			validateDraft();
+		});
+		analyzeAction.addEventListener('click', analyze);
+		validateDraft();
+	</script>
+</BaseLayout>

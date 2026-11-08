@@ -1,0 +1,55 @@
+---
+import MatchRow from '../matches/MatchRow.astro';
+import { formatDate, pluralize } from '../../lib/format';
+import type { TeamSession } from '../../lib/stats';
+
+interface Props {
+	sessions: readonly TeamSession[];
+	compact?: boolean;
+}
+
+const { sessions, compact = false } = Astro.props;
+const visibleSessions = compact ? sessions.slice(0, 3) : sessions;
+---
+
+<section id="memory-title" aria-labelledby="memory-heading">
+	<header class="flex flex-wrap items-end justify-between gap-5">
+		<div>
+			<p class="label-caps text-sky-300">La constellation des soirées</p>
+			<h2 id="memory-heading" class="mt-2 font-display text-3xl text-ink sm:text-4xl">L’histoire, match après match.</h2>
+			<p class="mt-3 max-w-2xl text-sm leading-relaxed text-muted">
+				Une étoile marque une session de jeu : les parties à cinq rapprochées dans le temps. Chaque résultat ouvre son récit.
+			</p>
+		</div>
+		{compact && <a href="/history" class="focus-ring border-b border-white/20 pb-2 text-sm text-muted transition-colors hover:border-gold-200 hover:text-ink">Toute la chronologie <span aria-hidden="true">↗</span></a>}
+	</header>
+
+	{
+		visibleSessions.length === 0 ? (
+			<p class="mt-8 border-l border-white/15 py-3 pl-5 text-sm text-muted">
+				Aucune soirée à cinq n’est encore archivée. Les matchs incomplets ne sont pas mélangés à cette mémoire collective.
+			</p>
+		) : (
+			<ol class="relative mt-8 ml-2 border-l border-sky-300/20 pl-7 sm:ml-4 sm:pl-10">
+				{visibleSessions.map((session) => (
+					<li id={`session-${Math.floor(session.startedAt / 60_000)}`} class="relative pb-8 last:pb-0">
+						<span aria-hidden="true" class="absolute -left-[2.05rem] top-1 grid size-5 place-items-center rounded-full border border-sky-300/30 bg-night-950 text-xs text-gold-200 sm:-left-[2.8rem]">✦</span>
+						<div class="grid gap-4 lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-8">
+							<div class="pt-3">
+								<p class="font-display text-xl text-ink">{formatDate(session.startedAt)}</p>
+								<p class="mt-2 text-sm text-muted">
+									{pluralize(session.matches.length, 'match')} · {session.wins} V · {session.losses} D
+								</p>
+							</div>
+							<div class="min-w-0 border border-white/10 bg-night-900/50">
+								<ol class="divide-y divide-white/8">
+									{session.matches.map((match) => <li><MatchRow match={match} permalinkOnly /></li>)}
+								</ol>
+							</div>
+						</div>
+					</li>
+				))}
+			</ol>
+		)
+	}
+</section>

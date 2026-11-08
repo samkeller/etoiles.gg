@@ -1,122 +1,112 @@
 ---
 import FormStrip from '../ui/FormStrip.astro';
-import Metric from '../ui/Metric.astro';
-import Panel from '../ui/Panel.astro';
-import RingGauge from '../ui/RingGauge.astro';
-import { formatDate, formatMonthYear, pluralize } from '../../lib/format';
-import type { TeamOverview as Overview } from '../../lib/stats';
-import type { MatchSummary } from '../../lib/stats';
+import ChampionIcon from '../ui/ChampionIcon.astro';
+import { formatDate, formatPercent, pluralize } from '../../lib/format';
+import type { TeamOverview as Overview, MatchSummary, TeamSession } from '../../lib/stats';
 import { TEAM_NAME } from '../../lib/site';
 
 interface Props {
 	overview: Overview;
 	recentMatches: readonly MatchSummary[];
+	latestSession: TeamSession | null;
 }
 
-const { overview, recentMatches } = Astro.props;
-const { currentStreak, recentForm } = overview;
-const winPercent = overview.winRate === null ? null : Math.round(overview.winRate * 100);
-const streakIsWin = currentStreak.result === 'win';
+const { overview, recentMatches, latestSession } = Astro.props;
+const latestMatch = latestSession?.matches[0] ?? null;
+const winPercent = overview.winRate === null ? null : formatPercent(overview.winRate);
+const streakLabel = overview.currentStreak.result === 'win' ? 'victoires' : 'défaites';
+const [teamNameLead, teamNameRest = ''] = TEAM_NAME.split(' de ');
 ---
 
-<Panel divider aria-labelledby="team-title" class="px-6 pt-12 pb-8 sm:px-10 sm:pb-10">
-	<header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-		<div>
-			<h1
-				id="team-title"
-				class="mt-2 font-display text-4xl font-bold uppercase tracking-wide text-gold-gradient sm:text-5xl"
-			>
-				{TEAM_NAME}
+<section id="team-title" aria-labelledby="team-name" class="relative isolate overflow-hidden border-y border-white/10 py-10 sm:py-16">
+	<div aria-hidden="true" class="pointer-events-none absolute -top-20 right-[8%] -z-10 size-72 rounded-full bg-sky-300/5 blur-3xl"></div>
+	<div class="mx-auto grid max-w-7xl gap-10 px-4 sm:px-8 lg:grid-cols-[minmax(0,1.3fr)_minmax(18rem,0.7fr)] lg:items-end lg:gap-16">
+		<div class="max-w-3xl">
+			<p class="label-caps flex items-center gap-3 text-sky-300">
+				<span class="h-px w-8 bg-sky-300/70" aria-hidden="true"></span>
+				Le carnet de bord · Classé flexible
+			</p>
+			<h1 id="team-name" class="mt-6 font-display text-5xl leading-[0.98] font-medium tracking-tight text-ink sm:text-7xl">
+				{teamNameLead}<br />
+				<span class="text-gold-200">de {teamNameRest}</span>
 			</h1>
+			<p class="mt-6 max-w-xl font-display text-xl leading-relaxed text-grey-300 sm:text-2xl">
+				Cinq amis, une constellation de parties. Un lieu pour comprendre notre jeu, préparer la suite et garder les bons souvenirs.
+			</p>
+			<p class="mt-5 text-sm font-medium tracking-wide text-gold-200">Fait à cinq, pour les cinq. <span aria-hidden="true">✦</span></p>
+
+			<div class="mt-10 flex flex-wrap items-center gap-x-8 gap-y-3">
+				<a href="/history" class="focus-ring inline-flex items-center gap-3 border-b border-gold-200/50 pb-2 text-sm text-ink transition-colors hover:border-gold-100">
+					Parcourir notre histoire <span aria-hidden="true">↗</span>
+				</a>
+				<a href="/draft" class="focus-ring inline-flex items-center gap-3 border-b border-sky-300/50 pb-2 text-sm text-sky-300 transition-colors hover:border-sky-300">
+					Préparer une composition <span aria-hidden="true">↗</span>
+				</a>
+			</div>
 		</div>
+
+		<aside aria-label="Dernière soirée à cinq" class="relative border-l border-white/15 py-2 pl-6 sm:pl-8">
+			<p class="label-caps text-muted">Dernière soirée à cinq</p>
+			{
+				latestSession && latestMatch ? (
+					<>
+						<p class="mt-3 font-display text-2xl text-ink">{formatDate(latestSession.startedAt)}</p>
+						<p class="mt-2 text-sm text-muted">
+							{pluralize(latestSession.matches.length, 'match')} · {latestSession.wins} victoire{latestSession.wins === 1 ? '' : 's'} · {latestSession.losses} défaite{latestSession.losses === 1 ? '' : 's'}
+						</p>
+						<a href={`/matches/${latestMatch.id}`} class="focus-ring mt-5 flex items-center justify-between gap-4 border-t border-white/10 pt-4 text-sm">
+							<span class="flex items-center gap-2">
+								<span class:list={['size-2 rotate-45', latestMatch.outcome === 'win' ? 'bg-win shadow-glow-gold' : 'bg-loss']} aria-hidden="true"></span>
+								<span class="text-ink">{latestMatch.outcome === 'win' ? 'La dernière s’est terminée par une victoire' : 'La dernière s’est terminée par une défaite'}</span>
+							</span>
+							<span aria-hidden="true" class="text-muted">↗</span>
+						</a>
+						<div class="mt-4 flex gap-2" aria-label="Champions de la dernière partie">
+							{latestMatch.members.map((member) => <ChampionIcon champion={member.champion} size="sm" />)}
+						</div>
+					</>
+				) : (
+					<p class="mt-3 max-w-sm text-sm leading-relaxed text-muted">
+						La constellation attend sa première partie complète. Les statistiques collectives ne s’affichent qu’avec les cinq joueurs réunis.
+					</p>
+				)
+			}
+		</aside>
+	</div>
+
+	<div class="mx-auto mt-12 grid max-w-7xl gap-8 border-t border-white/10 px-4 pt-7 sm:px-8 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
 		{
-			overview.lastMatchAt !== null && (
-				<p class="flex items-center gap-2 text-sm text-muted">
-					<img src="/riot/misc/clock-icon-gold1.svg" alt="" width="16" height="16" class="size-4" />
-					Dernier alignement des étoiles
-					<time
-						datetime={new Date(overview.lastMatchAt).toISOString()}
-						class="font-semibold text-ink"
-					>
-						{formatDate(overview.lastMatchAt)}
-					</time>
+			overview.matchCount > 0 ? (
+				<>
+					<div>
+						<div class="flex flex-wrap items-baseline justify-between gap-3">
+							<p class="label-caps text-muted">Forme collective · {pluralize(overview.recentForm.length, 'dernier match', 'derniers matchs')}</p>
+							<p class="text-sm text-muted">
+								Série active : <span class="font-semibold text-ink">{overview.currentStreak.count} {streakLabel}</span>
+							</p>
+						</div>
+						<FormStrip matches={recentMatches} streakCount={overview.currentStreak.count} class="mt-4" />
+					</div>
+					<dl class="grid grid-cols-3 gap-x-6 gap-y-3 md:border-l md:border-white/10 md:pl-8">
+						<div>
+							<dt class="label-caps text-[0.6rem] text-muted">Matchs à cinq</dt>
+							<dd class="mt-1 font-display text-2xl tabular-nums text-ink">{overview.matchCount}</dd>
+						</div>
+						<div>
+							<dt class="label-caps text-[0.6rem] text-muted">Victoires</dt>
+							<dd class="mt-1 font-display text-2xl tabular-nums text-gold-200">{winPercent}</dd>
+						</div>
+						<div>
+							<dt class="label-caps text-[0.6rem] text-muted">Meilleure série</dt>
+							<dd class="mt-1 font-display text-2xl tabular-nums text-ink">{overview.bestWinStreak}</dd>
+						</div>
+					</dl>
+				</>
+			) : (
+				<p class="text-sm leading-relaxed text-muted">
+					Les données de l’équipe apparaîtront ici après une soirée jouée à cinq en Flex. Les parties incomplètes restent à part.
 				</p>
 			)
 		}
-	</header>
-
-	<div class="my-8 h-px bg-linear-to-r from-gold-500/0 via-gold-500/70 to-gold-500/0" aria-hidden="true"></div>
-
-	{
-		winPercent === null ? (
-			<p class="py-10 text-center text-muted">
-				Aucun match joué à cinq pour l'instant. Les statistiques apparaîtront après la
-				première partie complète.
-			</p>
-		) : (
-			<div class="grid items-center gap-10 lg:grid-cols-[auto_minmax(0,1fr)] lg:gap-14">
-				<div class="flex flex-col items-center gap-5">
-					<RingGauge ratio={overview.winRate ?? 0} class="w-56 sm:w-64">
-						<span class="flex items-start justify-center font-display font-bold text-gold-gradient">
-							<span class="text-7xl leading-none tabular-nums">{winPercent}</span>
-							<span class="mt-1 text-3xl leading-none">%</span>
-						</span>
-						<span class="label-caps mt-2 text-muted">de victoires</span>
-					</RingGauge>
-					<ul class="flex gap-6 text-sm">
-						<li class="flex items-center gap-2">
-							<span class="size-2.5 rotate-45 bg-win" aria-hidden="true" />
-							<span class="font-semibold text-ink">{pluralize(overview.winCount, 'victoire')}</span>
-						</li>
-						<li class="flex items-center gap-2">
-							<span class="size-2.5 rotate-45 bg-loss" aria-hidden="true" />
-							<span class="text-muted">{pluralize(overview.lossCount, 'défaite')}</span>
-						</li>
-					</ul>
-				</div>
-
-				<div class="flex min-w-0 flex-col gap-8">
-					<section aria-labelledby="form-title">
-						<div class="flex flex-wrap items-end justify-between gap-3">
-							<h2 id="form-title" class="label-caps text-muted">
-								Forme · {pluralize(recentForm.length, 'dernier match', 'derniers matchs')}
-							</h2>
-							<p class="flex items-baseline gap-2">
-								<span class="label-caps text-muted">Série en cours</span>
-								<span
-									class:list={[
-										'font-display text-xl font-bold',
-										streakIsWin ? 'text-gold-gradient' : 'text-grey-300',
-									]}
-								>
-									{pluralize(currentStreak.count, streakIsWin ? 'victoire' : 'défaite')}
-								</span>
-							</p>
-						</div>
-						<FormStrip matches={recentMatches} streakCount={currentStreak.count} class="mt-5" />
-					</section>
-
-					<dl class="grid gap-6 border-t border-gold-700/60 pt-6 sm:grid-cols-3">
-						<Metric
-							label="Matchs à cinq"
-							value={overview.matchCount.toLocaleString('fr-FR')}
-							icon="/riot/positions/icon-position-fill.png"
-						/>
-						<Metric
-							label="Meilleure série"
-							value={pluralize(overview.bestWinStreak, 'victoire')}
-							icon="/riot/misc/icon-star-shards-36.png"
-						/>
-						{overview.firstMatchAt !== null && (
-							<Metric
-								label="Ensemble depuis"
-								value={formatMonthYear(overview.firstMatchAt)}
-								icon="/riot/mastery/icon-mastery.svg"
-							/>
-						)}
-					</dl>
-				</div>
-			</div>
-		)
-	}
-</Panel>
+	</div>
+</section>
