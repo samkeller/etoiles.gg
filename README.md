@@ -1,4 +1,4 @@
-# etoiles.gg
+# etoiles.win
 
 Dashboard analytique des **Étoiles de l'Esport**, une équipe de cinq en classé flexible.
 Les statistiques d'équipe ne comptent que les parties disputées avec les cinq joueurs.
@@ -26,7 +26,7 @@ depuis SQLite, présente :
   permettent de les consulter (`?history=all` et `?partial=show`).
 
 Le nom du site est centralisé dans `src/lib/site.ts` (`SITE_NAME`, actuellement
-`etoiles.gg`), séparément du nom de l'équipe (`TEAM_NAME`). Le menu opaque reste visible
+`etoiles.win`), séparément du nom de l'équipe (`TEAM_NAME`). Le menu opaque reste visible
 sur toute la largeur de l'écran lors du défilement ; le fond fixe couvre l'écran.
 La forme récente et les meilleures parties ouvrent le même détail de match.
 Ce détail inclut les sorts d'invocateur ; il réutilise les fragments déjà chargés pendant

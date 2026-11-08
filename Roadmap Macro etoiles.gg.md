@@ -1,4 +1,4 @@
-# etoiles.gg — Roadmap macro fonctionnelle & technique
+# etoiles.win — Roadmap macro fonctionnelle & technique
 
 Document de référence pour le projet. Il distingue l'existant vérifié des décisions et
 fonctionnalités encore à réaliser ; les éléments futurs ne doivent pas être anticipés par

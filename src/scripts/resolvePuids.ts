@@ -1,6 +1,6 @@
 /**
  * ═════════════════════════════════════════════════════════════════
- *  ÉTOILES DE L'ESPORT ★ etoiles.gg ★ Resolver de PUUIDs
+ *  ÉTOILES DE L'ESPORT ★ etoiles.win ★ Resolver de PUUIDs
  * ──────────────────────────────────────────────────────────────
  *  Chaque étoile garde son identité ; ici, Riot IDs deviennent
  *  PUUIDs, gravés en base. Argument : "Pseudo#TAG" → players.

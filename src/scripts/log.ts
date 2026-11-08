@@ -1,6 +1,6 @@
 /**
  * ═════════════════════════════════════════════════════════════════
- *  ÉTOILES DE L'ESPORT ★ etoiles.gg ★ Logger minimal
+ *  ÉTOILES DE L'ESPORT ★ etoiles.win ★ Logger minimal
  * ──────────────────────────────────────────────────────────────
  *  LOG_LEVEL=silent|info (défaut : info). Des étapes qui ouvrent
  *  et ferment la boucle : ── 1. titre ──… ✓ 1. titre.

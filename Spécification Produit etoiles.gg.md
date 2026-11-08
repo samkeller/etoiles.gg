@@ -1,4 +1,4 @@
-# Spec produit — etoiles.gg v0.2
+# Spec produit — etoiles.win v0.2
 
 Dashboard analytique pour « Les Étoiles de l'Esport » — équipe de 5 en classé flexible.
 
@@ -39,7 +39,7 @@ Un seul package, pas de monorepo.
 | Déploiement | Railway, Dockerfile Node 24 et volume `/data` pour SQLite ; procédure dans README |
 
 ```
-etoiles.gg/
+etoiles.win/
 ├── src/
 │   ├── pages/index.astro        # la one-page
 │   ├── pages/api/*.json.ts      # endpoints GET
@@ -174,7 +174,7 @@ Mobile-first : toutes les animations fonctionnent au tap, la constellation devie
 | P3 | Tous les endpoints + fixtures | 0.5 j |
 | P4 | One-page : hero étoilé, sections data, animations | 2–3 j |
 | P5 | Constellation interactive (signature) | 1 j |
-| P6 | Polish, mobile, deploy etoiles.gg, README public | 0.5 j |
+| P6 | Polish, mobile, deploy etoiles.win, README public | 0.5 j |
 
 **Total ≈ 6–7 jours.**
 
