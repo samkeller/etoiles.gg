@@ -27,16 +27,16 @@ Un seul package, pas de monorepo.
 
 | | Choix |
 |---|---|
-| Framework | **Astro** (site statique) + **Preact** pour les îlots interactifs |
+| Framework | **Astro SSR** via adaptateur Node ; Preact disponible pour des îlots futurs |
 | API | **Routes API Astro (SSR endpoint files)** — Astro sert `/api/*.json` nativement, pas besoin de Fastify ni de serveur séparé |
 | DB | **SQLite**, driver `better-sqlite3`, requêtes SQL brutes (pas d'ORM — 6 tables, 10 requêtes, un ORM ne nous apporte rien) |
-| Migration | Un simple fichier `schema.sql` appliqué au boot si la DB n'existe pas |
-| Cron | **node-cron** lancé dans un hook Astro, plus CLI `npm run ingest` |
+| Migration | Schéma partagé `src/lib/db/schema.ts`, appliqué au démarrage ; migration additive des runs existants |
+| Cron | Planificateur dans le runtime Node, quotidien à 04:00 UTC, opt-in ; CLI manuelle et verrou SQLite commun |
 | Styling | Tailwind CSS v4 |
 | Animations | Motion (framer-motion pour Preact) + transitions Astro view transitions |
 | Validation | Zod (réponses Riot uniquement) |
 | Tests | Vitest — parsing Riot + requêtes SQL sur fixtures |
-| Déploiement | Railway, volume persistant pour le .sqlite |
+| Déploiement | Railway, Dockerfile Node 24 et volume `/data` pour SQLite ; procédure dans README |
 
 ```
 etoiles.gg/
@@ -48,7 +48,7 @@ etoiles.gg/
 │   ├── lib/ingest.ts            # batch quotidien / CLI
 │   ├── components/*.astro       # sections de la page
 │   └── islands/*.tsx            # îlots Preact (synergie picker, graphs animés)
-├── schema.sql
+├── src/lib/db/schema.ts         # source SQL partagee
 └── fixtures/                    # réponses Riot anonymisées pour tests
 ```
 
@@ -56,7 +56,7 @@ Pourquoi ça allège : le serveur API disparaît (Astro endpoints), l'ORM dispar
 
 ---
 
-## 4. Données (SQLite, 4 tables)
+## 4. Données (SQLite)
 
 ```sql
 players (
@@ -78,7 +78,10 @@ participants (               -- uniquement nos 5 joueurs
   lineup_size INT            -- 5 = full team, sinon nb de coéquipiers présents
 )
 
-ingest_runs (started_at INT, new_matches INT, status TEXT)
+ingest_runs (started_at INT, finished_at INT, new_matches INT, status TEXT)
+ingest_pending (match_id TEXT PRIMARY KEY)
+ingest_cursors (puuid TEXT PRIMARY KEY, start_time INT)
+ingest_lock (id INT PRIMARY KEY, owner TEXT, expires_at INT)
 ```
 
 Notes :
@@ -95,8 +98,12 @@ Notes :
 - Nouveaux matchs (absents de la table, intersection des listes) : fetch détail → insert participants
 - Idempotent (INSERT OR IGNORE), backoff sur 429 (header Retry-After), ~1 req/100 ms
 - **Backfill initial** : les 2 ans d'historique, une passe CLI `npm run ingest -- --backfill`
-- Cron quotidien via node-cron + CLI `npm run ingest`
-- Table `ingest_runs` → expose "dernière synchro" dans le footer
+- Planning quotidien à 04:00 UTC dans le service web, activé avec `INGEST_ENABLED=true`
+  seulement après validation du déploiement et de l'ingestion ; aucun appel au démarrage.
+- CLI `npm run ingest` dans le conteneur via `railway ssh`, pas de bouton public.
+- Verrou SQLite renouvelé pendant le run, expiration après crash et refus du chevauchement.
+- Table `ingest_runs` → dernière tentative et dernière réussite dans le footer et
+  `/api/sync.json` ; `/health` vérifie séparément le serveur et le stockage en lecture/écriture.
 
 Secrets : `RIOT_API_KEY` en variable d'environnement uniquement (Railway + `.env` gitignored + `.env.example` versionné). Gitleaks en CI. Aucune donnée sensible en DB.
 
@@ -162,8 +169,8 @@ Mobile-first : toutes les animations fonctionnent au tap, la constellation devie
 | Phase | Contenu | Est. |
 |---|---|---|
 | P0 | Scaffold Astro + Tailwind + CI (lint/tests) | 0.5 j |
-| P1 | Client Riot + schema.sql + CLI ingest/backfill + tests idempotence | 1 j |
-| P2 | Cron node-cron + volume Railway + overview.json | 0.5 j |
+| P1 | Client Riot + schéma partagé + CLI ingest/backfill + tests idempotence | 1 j |
+| P2 | Runtime planifié opt-in, volume Railway, healthcheck et statut de synchronisation | Validation réelle restante |
 | P3 | Tous les endpoints + fixtures | 0.5 j |
 | P4 | One-page : hero étoilé, sections data, animations | 2–3 j |
 | P5 | Constellation interactive (signature) | 1 j |

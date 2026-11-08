@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
-    "start": "node ./dist/server/entry.mjs",
+    "start": "tsx src/scripts/serve.ts",
     "preview": "astro preview",
     "astro": "astro",
     "check": "astro check",
@@ -26,13 +26,13 @@
     "astro": "^7.4.7",
     "better-sqlite3": "^13.0.3",
     "dotenv": "^18.0.9",
+    "tsx": "^4.23.15",
     "preact": "^11.2.0",
     "tailwindcss": "^4.3.5"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.12",
     "@types/better-sqlite3": "^9.6.0",
-    "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "vitest": "^5.1.0"
   }

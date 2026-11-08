@@ -63,7 +63,7 @@ un MVP de match est une récompense, pas un jugement.
   80 à deux et 39 à un joueur. Le dernier run enregistré a réussi sans nouveau match.
   Ces volumes sont un instantané local, pas des constantes produit.
 - **Schéma :** tables `players`, `matches`, `participants`, `ingest_runs`,
-  `ingest_pending` et `ingest_cursors`, définies dans
+  `ingest_pending`, `ingest_cursors` et `ingest_lock`, définies dans
   `src/lib/db/schema.ts` (source unique incluse dans le bundle). La base est `./etoiles.db` par défaut, surchargeable par
   `DATABASE_PATH`, et ignorée par Git.
 - **Tests :** Vitest teste `getOverview()`, `getMatches()`, `getMatchDetail()`,
@@ -71,11 +71,12 @@ un MVP de match est une récompense, pas un jugement.
   (`src/lib/stats/fixtures.ts`) : absence de matchs, exclusion des lineups partiels, séries,
   forme, détail d'un match, identifiants invalides, enregistrements incomplets, seuil exact
   de 5 matchs, identité joueur/champion/rôle et absence de statistiques à 4 matchs.
-- **Validation après housekeeping :** 71 tests passent ; check sans erreur, warning
+- **Validation actuelle :** 97 tests passent ; check sans erreur, warning
   ou hint, build réussi. Rendu desktop/mobile et ouverture
   du dialog au clic et au clavier vérifiés ; états vide et composition qualifiée vérifiés
   sur un serveur de production avec SQLite isolée.
-- **Pas encore livré :** cron, hébergement Railway configuré ou healthcheck.
+- **Lot 4 préparé :** runtime de production, planning quotidien opt-in, healthcheck
+  et statut de synchronisation. Service/volume Railway et ingestion réelle à valider.
 
 **Ingestion fiabilisée :** pagination par tranches de 100 IDs, écritures transactionnelles,
 file persistante des IDs à traiter et curseurs individuels avec chevauchement de 24 heures.
@@ -111,8 +112,8 @@ Pour la suite de l'interface : Astro pour le rendu serveur, Tailwind et les toke
 `global.css` pour tout le style (pas de feuilles de style par composant), Preact seulement
 pour les interactions réellement nécessaires, et graphiques SVG maison plutôt qu'une
 bibliothèque de graphes. Preact reste installé mais n'est pas intégré ; ne l'activer que
-lors d'un lot qui en a besoin. L'hébergement Railway et le volume `/data` restent des
-objectifs à confirmer, pas un déploiement existant.
+lors d'un lot qui en a besoin. L'hébergement Railway et le volume `/data` sont confirmés ;
+la procédure est documentée dans le README, mais ce n'est pas un déploiement existant.
 
 ## 1. Contrats produit et techniques
 
@@ -238,11 +239,34 @@ et rendu mobile vérifiés.
 
 ### LOT 4 — Exploitation et déploiement
 
-- Ajouter une synchronisation planifiée seulement après validation du déploiement et du
-  fonctionnement de l'ingestion.
-- Ajouter healthcheck, statut de synchronisation, métadonnées et documentation de démarrage.
-- Vérifier le stockage persistant, les variables d'environnement, les logs et le comportement
-  mobile/accessibilité avant mise en production.
+**Code livré, validation Railway restante :**
+
+- Dockerfile Node 24, runtime `npm start` et CLI présents dans l'image de production.
+- Volume `/data` et `DATABASE_PATH=/data/etoiles.db` : refus de démarrer sur Railway
+  sans volume ou avec une base hors volume ; schéma initialisé et migré au démarrage.
+- `/health` vérifie SQLite en lecture/écriture ; `/api/sync.json` expose les dernières
+  tentatives/réussites, la file, l'état en cours et les données de plus de 48 heures.
+  Ces endpoints ne sont pas cachés ; aucun endpoint ne déclenche d'ingestion.
+- Footer de synchronisation concis, métadonnées Open Graph et procédure Railway dans README.
+- Synchronisation **quotidienne à 04:00 UTC**, désactivée par défaut. À activer seulement
+  après validation du déploiement et d'une ingestion manuelle réussie. Le planificateur
+  tourne dans le même service/volume, attend le healthcheck et ne rattrape pas les créneaux
+  manqués au démarrage.
+- Relance manuelle par CLI dans le conteneur (`railway ssh`, puis `npm run ingest`) ;
+  pas de bouton public. Verrou SQLite avec heartbeat et expiration après crash :
+  pas de chevauchement des runs manuels et planifiés.
+- Tests des seuils horaires UTC, enchaînement après échec, arrêt, absence de chevauchement,
+  état vide/échec/périmé, lecture seule et migration des bases existantes.
+- Runtime de production validé localement sur volume isolé : cinq joueurs et un match
+  fixture, état non caché, échec CLI sans clé, maintien de la dernière réussite et des
+  données après redémarrage. Aucun appel Riot réel pendant cette validation.
+  Activation du planning vérifiée avec fixtures : prochain créneau 04:00 UTC loggé,
+  aucune ingestion au démarrage et état interrompu pour un verrou expiré.
+
+**À valider sur Railway :** service/volume et secrets, premier backfill, vrais logs,
+persistance après redémarrage, run de 04:00 UTC et restauration d'une sauvegarde.
+Docker n'est pas disponible dans l'environnement local : l'image doit encore être
+construite et vérifiée sur Railway.
 
 **Terminé quand :** un déploiement documenté peut se synchroniser sans intervention manuelle
 et survivre à un redémarrage du serveur.

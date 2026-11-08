@@ -39,6 +39,15 @@
   et retourner un code d'erreur en cas de synchronisation partielle.
 - [x] Partager un schéma SQL unique inclus dans le build de production.
 
-## Suite de la roadmap
+## Lot 4 — Exploitation
 
-- [ ] Lot 4 : déploiement, stockage persistant, cron et healthcheck.
+- [x] Image Node 24/Astro avec runtime et CLI de production.
+- [x] Vérifier le volume Railway et le chemin SQLite ; conserver les données au redémarrage.
+- [x] Healthcheck lecture/écriture, statut JSON non caché et dernière synchronisation dans le footer.
+- [x] Planning quotidien à 04:00 UTC, opt-in après healthcheck, configuration des cinq joueurs
+  et première ingestion réussie.
+- [x] CLI manuelle uniquement ; verrou commun aux runs manuels et planifiés.
+- [x] Documenter variables, volume, initialisation, logs, sauvegardes et procédure Railway.
+- [ ] Créer le service et le volume Railway, renseigner la clé et configurer `/health`.
+- [ ] Valider une ingestion manuelle réelle et la persistance après redémarrage sur Railway.
+- [ ] Activer `INGEST_ENABLED=true`, vérifier le run à 04:00 UTC et tester une restauration.

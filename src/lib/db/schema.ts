@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS participants (
 
 CREATE TABLE IF NOT EXISTS ingest_runs (
   started_at   INTEGER,
+  finished_at  INTEGER,
   new_matches  INTEGER,
   status       TEXT
 );
@@ -39,5 +40,11 @@ CREATE TABLE IF NOT EXISTS ingest_pending (
 CREATE TABLE IF NOT EXISTS ingest_cursors (
   puuid TEXT PRIMARY KEY,
   start_time INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS ingest_lock (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  owner TEXT NOT NULL,
+  expires_at INTEGER NOT NULL
 );
 `;

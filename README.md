@@ -40,6 +40,8 @@ Les données sont aussi exposées en JSON (GET) :
 | `/api/matches.json?scope=full\|partial` | Liste des matchs (`full` par défaut) |
 | `/api/matches/{id}.json` | Détail d'un match (400 si l'id est invalide, 404 s'il est inconnu) |
 | `/api/players.json` | Fiches des cinq joueurs |
+| `/api/sync.json` | Dernière tentative/réussite, état, file d'attente et planning |
+| `/health` | Disponibilité du serveur et de SQLite en lecture/écriture (200 ou 503) |
 
 Le style passe par Tailwind ; les tokens de la charte (couleurs, polices, animations)
 sont définis dans `src/styles/global.css` et les composants réutilisables dans
@@ -88,7 +90,7 @@ bloqué dans `TODO.md`, plutôt que de fournir un lien incorrect.
 | `npm run check` | Vérifie les types et composants Astro |
 | `npm test` | Exécute les tests Vitest |
 | `npm run build` | Construit le site de production |
-| `npm start` | Démarre le serveur Node de production |
+| `npm start` | Démarre le serveur Node de production et le planificateur opt-in |
 | `npm run preview` | Prévisualise le build |
 | `npm run ingest` | Lance l'ingestion des matchs flex pour les PUUIDs configurés |
 | `npm run ingest -- --backfill` | Lance l'ingestion complète (sans date de début) des matchs flex pour les PUUIDs configurés |
@@ -127,6 +129,114 @@ par Git.
 Le schéma SQL est défini une seule fois dans `src/lib/db/schema.ts`, partagé par l'app,
 les scripts et les fixtures. Il est inclus dans le bundle de production et ne dépend
 pas d'un fichier SQL à côté des chunks compilés.
+
+## Déployer sur Railway
+
+Le dépôt est prêt à être déployé, mais aucun service, volume ou secret Railway n'a été
+créé automatiquement. Le `Dockerfile` utilise Node 24, construit Astro et conserve
+uniquement les dépendances de production. `tsx` en fait partie pour exécuter le
+planificateur et les CLI sur le serveur ; les fichiers SQLite et `.env` sont exclus
+de l'image. Le conteneur lance directement le même runtime que `npm start`, sans
+wrapper npm, pour transmettre les signaux d'arrêt au serveur et au run actif.
+
+### 1. Créer le service et son stockage
+
+1. Créer un projet Railway et un service connecté au dépôt GitHub. Railway détecte
+   le `Dockerfile` à la racine ; ne pas remplacer sa commande de démarrage.
+2. Ajouter un **volume au même service** et choisir le point de montage **`/data`**.
+   Ce dossier est le disque persistant, pas un répertoire du dépôt : la base y reste
+   lorsque le conteneur est remplacé.
+3. Définir les variables du service :
+
+   | Variable | Valeur |
+   | --- | --- |
+   | `DATABASE_PATH` | `/data/etoiles.db` |
+   | `INGEST_ENABLED` | `false` pour le premier déploiement |
+   | `RIOT_API_KEY` | Clé valide, uniquement dans les secrets Railway |
+
+   Railway fournit `PORT` et `RAILWAY_VOLUME_MOUNT_PATH` ; ne pas recopier les variables
+   locales à l'aveugle. `HOST=0.0.0.0` est défini par l'image. Le démarrage refuse un
+   service Railway sans volume ou une base située en dehors du volume.
+4. Dans les réglages de déploiement, choisir **`/health`** comme healthcheck (timeout
+   120 secondes), **une seule instance** et une politique de redémarrage **On Failure**.
+   Ne pas définir de cron Railway séparé : il n'aurait pas accès au même volume SQLite.
+5. Déployer et générer un domaine Railway. Vérifier `/health` (200), `/` et
+   `/api/sync.json`. Une base encore vide est saine ; elle affiche une absence de
+   synchronisation, pas une réussite inventée.
+
+Le volume n'est disponible ni au build ni en pre-deploy : initialisation et migration
+ont lieu au démarrage. Les redéploiements avec volume peuvent occasionner une brève
+indisponibilité ; le healthcheck Railway n'est pas une surveillance continue.
+
+### 2. Initialiser les joueurs et tester l'ingestion manuelle
+
+Ouvrir un shell **dans le conteneur déployé**, avec `railway ssh` après avoir lié
+le projet/service dans la CLI Railway. `railway run` exécute en local avec les variables
+distantes : ce n'est pas la commande pour écrire sur le volume.
+
+Dans ce shell, exécuter les commandes suivantes pour chacun des cinq Riot IDs :
+
+```sh
+cd /app
+npm run resolvePuids -- "Pseudo#TAG"
+```
+
+Puis effectuer le backfill initial :
+
+```sh
+npm run ingest -- --backfill
+```
+
+Vérifier les logs, un code de sortie nul, les vrais matchs sur `/` et une réussite
+dans `/api/sync.json`. Pour relancer manuellement une collecte incrémentale :
+
+```sh
+npm run ingest
+```
+
+Il n'y a **pas de bouton public ni d'endpoint de synchronisation**. La CLI est réservée
+aux personnes qui ont accès au service Railway. Un verrou SQLite empêche le
+chevauchement manuel/planifié ; une invocation concurrente échoue explicitement.
+
+### 3. Activer le planning après validation
+
+Après avoir validé le déploiement **et** l'ingestion manuelle, passer
+`INGEST_ENABLED=true` dans Railway et redéployer. Le démarrage vérifie une clé Riot
+correctement formée, exactement cinq joueurs et au moins une ingestion réussie,
+attend le healthcheck local, puis
+affiche `Next ingestion: ...` dans les logs.
+
+Le planning est **quotidien à 04:00 UTC** (05:00 en hiver, 06:00 en été à Paris),
+sans appel immédiat au démarrage. Une exécution échouée est loggée et reprise au
+prochain créneau ; les IDs en attente restent persistants. Après une interruption,
+le serveur reprogramme le prochain 04:00 UTC : les créneaux manqués ne sont pas
+rattrapés automatiquement, la CLI permet une reprise anticipée.
+Le verrou est renouvelé toutes les 30 secondes et expire au bout de cinq minutes
+si le processus est tué brutalement. Un arrêt propre libère le verrou.
+
+Le footer présente la dernière réussite, les échecs et un avertissement après 48 h
+sans réussite. Le statut JSON et le healthcheck sont non cachables ; une panne Riot
+ne rend pas le serveur web indisponible. Surveiller ces deux aspects séparément,
+ainsi que les erreurs des runs et l'expiration de la clé Riot.
+
+### 4. Redémarrages et sauvegardes
+
+- Redémarrer le service et vérifier que les joueurs, matchs, curseurs et dernières
+  synchronisations sont encore présents, puis que le prochain créneau est loggé.
+- Activer les sauvegardes du volume Railway et tester une restauration sur un service
+  isolé, cron désactivé. Le volume persistant n'est pas à lui seul une sauvegarde.
+- Pour transférer une base locale existante, produire un snapshot cohérent via l'API
+  de backup SQLite (`better-sqlite3`), puis le téléverser sur le volume **service arrêté**.
+  Ne pas copier uniquement `etoiles.db` pendant une écriture : des transactions peuvent
+  encore se trouver dans `etoiles.db-wal`.
+- Les assets Riot sont inclus dans le build : lancer `syncAssets` en local, vérifier
+  puis versionner les assets mis à jour et reconstruire. Une écriture dans `public`
+  sur le conteneur n'actualise pas les assets compilés et ne survit pas au redéploiement.
+
+Références : [volumes Railway](https://docs.railway.com/volumes),
+[healthchecks](https://docs.railway.com/deployments/healthchecks),
+[Dockerfiles](https://docs.railway.com/builds/dockerfiles),
+[SSH](https://docs.railway.com/cli/ssh).
 
 ## Stack
 

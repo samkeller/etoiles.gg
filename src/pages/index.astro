@@ -9,6 +9,8 @@ import { calculateCollective, getMatches, getOverview, getPlayers } from '../lib
 import { isPosition } from '../lib/lol';
 import type { Position } from '../lib/types';
 import { SITE_NAME } from '../lib/site';
+import { getSyncStatus } from '../lib/sync-status';
+import SyncStatus from '../components/ui/SyncStatus.astro';
 
 const associationRoles: Position[] = [];
 for (const key of ['role', 'role2']) {
@@ -19,6 +21,7 @@ for (const key of ['role', 'role2']) {
 }
 
 const overview = getOverview(db);
+const syncStatus = getSyncStatus(db);
 const players = getPlayers(db);
 const fullMatches = getMatches(db, 'full');
 const partialMatches = getMatches(db, 'partial');
@@ -65,6 +68,7 @@ const navigation = [
 		</main>
 
 		<footer class="mx-auto w-full max-w-7xl px-4 sm:px-8">
+			<SyncStatus status={syncStatus} />
 			<p class="border-t border-gold-700/60 py-5 text-xs leading-relaxed text-muted">
 			{SITE_NAME} n'est pas approuvé par Riot Games et ne reflète pas les opinions de Riot Games ni
 			de quiconque officiellement impliqué dans la production ou la gestion des propriétés de Riot

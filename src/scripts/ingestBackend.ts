@@ -90,7 +90,7 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 	} catch (error) {
 		failures.push(error instanceof Error ? error.message : String(error));
 	}
-	database.prepare('INSERT INTO ingest_runs (started_at, new_matches, status) VALUES (?, ?, ?)')
-		.run(startedAt, newMatches, failures.length ? 'failed' : 'ok');
+	database.prepare('INSERT INTO ingest_runs (started_at, finished_at, new_matches, status) VALUES (?, ?, ?, ?)')
+		.run(startedAt, Date.now(), newMatches, failures.length ? 'failed' : 'ok');
 	return { newMatches, failures };
 }

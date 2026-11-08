@@ -1,0 +1,33 @@
+---
+import type { getSyncStatus } from '../../lib/sync-status';
+
+interface Props {
+	status: ReturnType<typeof getSyncStatus>;
+}
+
+const { status } = Astro.props;
+const successAt = status.lastSuccess?.finishedAt ?? status.lastSuccess?.startedAt;
+const date = successAt === undefined ? null : new Date(successAt);
+const formatted = date?.toLocaleString('fr-FR', {
+	timeZone: 'Europe/Paris', day: 'numeric', month: 'short', year: 'numeric',
+	hour: '2-digit', minute: '2-digit',
+});
+---
+
+<p class="py-4 text-xs text-muted">
+	{status.state === 'running' ? (
+		<span>Synchronisation en cours.</span>
+	) : status.state === 'interrupted' ? (
+		<span>Synchronisation interrompue.</span>
+	) : status.state === 'failed' ? (
+		<span>Dernière synchronisation en échec.</span>
+	) : status.state === 'never' ? (
+		<span>Aucune synchronisation effectuée.</span>
+	) : null}
+	{date && (
+		<span>
+			Dernière réussite : <time datetime={date.toISOString()}>{formatted}</time> (Paris).
+		</span>
+	)}
+	{status.stale && date && <span> Données non actualisées depuis plus de 48 h.</span>}
+</p>

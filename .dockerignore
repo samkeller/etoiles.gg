@@ -1,0 +1,15 @@
+.git
+.github
+.astro
+node_modules
+dist
+.env
+.env.*
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+data
+**/*.test.ts
+src/lib/stats/fixtures.ts
+*.md
