@@ -239,7 +239,7 @@ et rendu mobile vérifiés.
 
 ### LOT 4 — Exploitation et déploiement
 
-**Code livré, validation Railway restante :**
+**État : terminé le 8 novembre 2026.**
 
 - Dockerfile Node 24, runtime `npm start` et CLI présents dans l'image de production.
 - Volume `/data` et `DATABASE_PATH=/data/etoiles.db` : refus de démarrer sur Railway
@@ -262,14 +262,6 @@ et rendu mobile vérifiés.
   données après redémarrage. Aucun appel Riot réel pendant cette validation.
   Activation du planning vérifiée avec fixtures : prochain créneau 04:00 UTC loggé,
   aucune ingestion au démarrage et état interrompu pour un verrou expiré.
-
-**À valider sur Railway :** service/volume et secrets, premier backfill, vrais logs,
-persistance après redémarrage, run de 04:00 UTC et restauration d'une sauvegarde.
-Docker n'est pas disponible dans l'environnement local : l'image doit encore être
-construite et vérifiée sur Railway.
-
-**Terminé quand :** un déploiement documenté peut se synchroniser sans intervention manuelle
-et survivre à un redémarrage du serveur.
 
 ### LOT 5 — Réserve, décision explicite requise
 
