@@ -110,8 +110,15 @@ Les échecs restent repris au prochain run ; un run comportant des erreurs est e
 `failed` et la CLI quitte avec un code non nul.
 
 Le client HTTP utilise un timeout de 10 secondes et au plus trois retries pour les erreurs
-réseau, 429 et 5xx. La clé Riot et les IDs sont validés avant les appels. Les assets sont
-vérifiés avant écriture (réponse HTTP et signature PNG), remplacés atomiquement, et une
+réseau, 429 et 5xx. Pour les appels Riot de collecte et de résolution des joueurs, il
+respecte `Retry-After` jusqu'à cinq minutes par attente ; un backfill peut donc prendre
+du temps. Si cette limite ou le nombre de
+retries est dépassé sur un 429, le run s'arrête en échec sans multiplier les appels :
+les IDs déjà collectés restent en attente et les curseurs des collectes inachevées ne
+sont pas avancés. Relancer `npm run ingest -- --backfill` une fois la limite Riot
+expirée pour reprendre aussi les collectes inachevées. La clé Riot et les IDs sont
+validés avant les appels. Les assets sont vérifiés avant écriture (réponse HTTP et
+signature PNG), remplacés atomiquement, et une
 synchronisation partielle ne se présente pas comme une réussite.
 
 Les statistiques partagent les mêmes validations des données brutes et des participants

@@ -20,7 +20,10 @@ export function parseRiotId(riotId: string): [string, string] {
 }
 
 async function get(path: string): Promise<unknown> {
-    return (await request(`https://europe.api.riotgames.com${path}`, { headers: riotHeaders() })).json();
+    return (await request(`https://europe.api.riotgames.com${path}`, {
+        headers: riotHeaders(),
+        maxRetryAfterMs: 5 * 60_000,
+    })).json();
 }
 
 /** 

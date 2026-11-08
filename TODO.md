@@ -18,6 +18,7 @@
   casts `any` d'icônes et formules KDA dupliquées.
 - [x] Retirer `cdragon-dd`, inutilisé ; conserver Preact et la bibliothèque d'assets Riot.
 - [ ] Repenser l'affichage des pages/composants et/ou afficher sur le menu ou le scroll en est.
+- [ ] L'image de fond d'écran n'est pas assez large et parfois coupe sur grand écran.
 
 ## Décision bloquée
 

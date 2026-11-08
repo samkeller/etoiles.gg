@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { addMatch, addPlayer, closeTestDatabases, createTestDatabase, fullLineup } from '../lib/stats/fixtures';
 import type { MatchDto } from '../lib/types';
 import { ingest } from './ingestBackend';
+import { RateLimitError } from '../lib/backendHttp';
 
 afterEach(closeTestDatabases);
 
@@ -13,6 +14,39 @@ function raw(id: string, startedAt = 100): MatchDto {
 }
 
 describe('ingestion', () => {
+	it('stops collecting on a rate limit and retains collected IDs and the unfinished cursor', async () => {
+		const database = createTestDatabase();
+		addPlayer(database, 'player-0', 'Original');
+		addPlayer(database, 'player-1', 'Other');
+		const page = Array.from({ length: 100 }, (_, index) => `EUW1_${index}`);
+		const client = {
+			getFlexMatchIds: vi.fn().mockResolvedValueOnce(page).mockRejectedValueOnce(new RateLimitError('HTTP 429')),
+			getMatch: vi.fn(),
+		};
+		expect((await ingest(database, client, true)).failures).toEqual(['Collection player-0: HTTP 429']);
+		expect(client.getFlexMatchIds).toHaveBeenCalledTimes(2);
+		expect(client.getMatch).not.toHaveBeenCalled();
+		expect(database.prepare('SELECT * FROM ingest_cursors').all()).toEqual([]);
+		expect(database.prepare('SELECT COUNT(*) AS count FROM ingest_pending').get()).toEqual({ count: 100 });
+		expect(database.prepare('SELECT status FROM ingest_runs').get()).toEqual({ status: 'failed' });
+	});
+
+	it('stops processing on a rate limit and resumes pending matches on the next run', async () => {
+		const database = createTestDatabase();
+		addPlayer(database, 'player-0', 'Original');
+		const client = {
+			getFlexMatchIds: vi.fn().mockResolvedValueOnce(['EUW1_1', 'EUW1_2']).mockResolvedValueOnce([]),
+			getMatch: vi.fn().mockRejectedValueOnce(new RateLimitError('HTTP 429'))
+				.mockResolvedValueOnce(raw('EUW1_1')).mockResolvedValueOnce(raw('EUW1_2')),
+		};
+		expect((await ingest(database, client, true)).failures).toEqual(['Match EUW1_1: HTTP 429']);
+		expect(client.getMatch).toHaveBeenCalledTimes(1);
+		expect(database.prepare('SELECT COUNT(*) AS count FROM ingest_pending').get()).toEqual({ count: 2 });
+		expect((await ingest(database, client)).failures).toEqual([]);
+		expect(database.prepare('SELECT * FROM ingest_pending').all()).toEqual([]);
+		expect(database.prepare('SELECT COUNT(*) AS count FROM matches').get()).toEqual({ count: 2 });
+	});
+
 	it('repairs legacy incomplete matches behind the cursor even if no new IDs are listed', async () => {
 		const database = createTestDatabase();
 		for (let i = 0; i < 5; i++) addPlayer(database, `player-${i}`, `Original ${i}`);

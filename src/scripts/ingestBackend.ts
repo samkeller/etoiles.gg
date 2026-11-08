@@ -3,6 +3,7 @@ import type { FlexMatchIdsOptions } from '../lib/riot';
 import type { MatchDto } from '../lib/types';
 import { validateMatch } from '../lib/matchValidation';
 import { validatedLineup } from '../lib/stats/shared';
+import { RateLimitError } from '../lib/backendHttp';
 
 interface RiotClient {
 	getFlexMatchIds(puuid: string, options: FlexMatchIdsOptions): Promise<string[]>;
@@ -39,7 +40,9 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 					// Overlap covers matches still in progress or awaiting Riot indexing during collection.
 					.run(puuid, Math.max(0, Math.floor(startedAt / 1000) - 24 * 60 * 60));
 			} catch (error) {
-				failures.push(`Collection ${puuid}: ${error instanceof Error ? error.message : String(error)}`);
+				const message = `Collection ${puuid}: ${error instanceof Error ? error.message : String(error)}`;
+				if (error instanceof RateLimitError) throw new Error(message);
+				failures.push(message);
 			}
 		}
 		const pending = database.prepare('SELECT match_id FROM ingest_pending').all() as { match_id: string }[];
@@ -84,7 +87,9 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 				})();
 				if (!existing && ours.length >= 2) newMatches++;
 			} catch (error) {
-				failures.push(`Match ${id}: ${error instanceof Error ? error.message : String(error)}`);
+				const message = `Match ${id}: ${error instanceof Error ? error.message : String(error)}`;
+				if (error instanceof RateLimitError) throw new Error(message);
+				failures.push(message);
 			}
 		}
 	} catch (error) {

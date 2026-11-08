@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { request } from './backendHttp';
+import { RateLimitError, request } from './backendHttp';
 import { getFlexMatchIds, getMatch, getPuuid, parseRiotId, riotHeaders } from './riot';
 import { addMatch, closeTestDatabases, createTestDatabase, fullLineup } from './stats/fixtures';
 
-afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); closeTestDatabases(); });
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); closeTestDatabases(); });
 
 describe('bounded HTTP requests', () => {
 	it('respects Retry-After within its wait budget and eventually succeeds', async () => {
@@ -20,9 +20,42 @@ describe('bounded HTTP requests', () => {
 		const fetch = vi.fn().mockResolvedValue(new Response('', { status: 429, headers: { 'retry-after': '999999' } }));
 		const sleep = vi.fn();
 		vi.stubGlobal('fetch', fetch);
-		await expect(request('https://example.test', { sleep })).rejects.toThrow('Retry-After exceeds');
+		await expect(request('https://example.test', { sleep })).rejects.toThrow('Retry-After 999999s exceeds');
 		expect(fetch).toHaveBeenCalledTimes(1);
 		expect(sleep).not.toHaveBeenCalled();
+	});
+
+	it('bounds Riot waits at five minutes and honors longer Retry-After values', async () => {
+		const fetch = vi.fn().mockResolvedValueOnce(new Response('', { status: 429, headers: { 'retry-after': '120' } }))
+			.mockResolvedValueOnce(Response.json([]));
+		vi.stubEnv('RIOT_API_KEY', 'RGAPI-00000000-0000-0000-0000-000000000000');
+		vi.stubGlobal('fetch', fetch);
+		vi.useFakeTimers();
+		const result = getFlexMatchIds('player', {});
+		await vi.advanceTimersByTimeAsync(119_999);
+		expect(fetch).toHaveBeenCalledTimes(1);
+		await vi.advanceTimersByTimeAsync(1);
+		expect(await result).toEqual([]);
+		expect(fetch).toHaveBeenCalledTimes(2);
+	});
+
+	it('exposes an exhausted 429 as a rate-limit error', async () => {
+		const fetch = vi.fn().mockImplementation(() => Promise.resolve(new Response('', { status: 429 })));
+		vi.stubGlobal('fetch', fetch);
+		await expect(request('https://example.test', { sleep: async () => {}, maxRetries: 2 })).rejects.toBeInstanceOf(RateLimitError);
+		expect(fetch).toHaveBeenCalledTimes(3);
+	});
+
+	it('accepts a five-minute Retry-After but rejects longer waits', async () => {
+		const fetch = vi.fn().mockResolvedValueOnce(new Response('', { status: 429, headers: { 'retry-after': '300' } }))
+			.mockResolvedValueOnce(new Response('ok'));
+		const sleep = vi.fn().mockResolvedValue(undefined);
+		vi.stubGlobal('fetch', fetch);
+		await request('https://example.test', { sleep, maxRetryAfterMs: 300_000 });
+		expect(sleep).toHaveBeenCalledWith(300_000);
+		fetch.mockResolvedValueOnce(new Response('', { status: 429, headers: { 'retry-after': '301' } }));
+		await expect(request('https://example.test', { sleep, maxRetryAfterMs: 300_000 })).rejects.toBeInstanceOf(RateLimitError);
+		expect(sleep).toHaveBeenCalledTimes(1);
 	});
 
 	it('stops retrying transient failures and never retries authentication errors', async () => {
