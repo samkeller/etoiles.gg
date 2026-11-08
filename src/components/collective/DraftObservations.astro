@@ -1,0 +1,78 @@
+---
+import DraftRow from './DraftRow.astro';
+import Disclosure from '../ui/Disclosure.astro';
+import Panel from '../ui/Panel.astro';
+import RoleSelect from '../ui/RoleSelect.astro';
+import { pluralize } from '../../lib/format';
+import type { DraftObservation } from '../../lib/stats';
+import type { Position } from '../../lib/types';
+
+interface Props {
+	title: string;
+	id: string;
+	observations: readonly DraftObservation[];
+	baseline: number;
+	minimumGames: number;
+	composition?: boolean;
+	associationRoles?: readonly Position[];
+}
+
+const { title, id, observations, baseline, minimumGames, composition = false, associationRoles = [] } = Astro.props;
+const visible = observations.slice(0, 4);
+const remaining = observations.slice(4);
+---
+
+<Panel as="div" aria-labelledby={id}>
+	<header class="border-b border-gold-700/50 px-5 py-5 sm:px-7">
+		<h3 {id} class="font-display text-xl font-bold text-ink">{title}</h3>
+		<p class="mt-1 text-xs text-muted">
+			{composition ? 'Même joueur, même champion, même rôle.' : 'Chaque champion est associé au joueur qui le joue.'}
+		</p>
+	</header>
+	{!composition && (
+		<form action="/#collective-title" method="get" class="border-b border-gold-700/40 px-5 py-4 sm:px-7">
+			<fieldset>
+				<legend class="label-caps text-muted">Filtrer les synergies par rôles</legend>
+				<div class="mt-3 flex flex-wrap items-end gap-3">
+					{['role', 'role2'].map((name, index) => (
+						<RoleSelect
+							{name}
+							label={index === 0 ? 'Premier rôle' : 'Second rôle (facultatif)'}
+							value={associationRoles[index]}
+						/>
+					))}
+					<button type="submit" class="focus-ring h-12 border border-hextech-300/40 bg-hextech-300/5 px-5 font-display font-bold text-hextech-300 transition-colors hover:border-hextech-300 hover:bg-hextech-300/10 motion-reduce:transition-none">Appliquer</button>
+					<a href="/#collective-title" class="focus-ring px-2 py-2 text-xs text-muted underline underline-offset-4">Réinitialiser</a>
+				</div>
+				<p class="mt-3 text-xs text-muted">Un rôle : tous les duos qui le contiennent. Deux rôles : ce duo précis. Seuls les matchs joués à ces rôles comptent.</p>
+			</fieldset>
+		</form>
+	)}
+	<p class="sr-only" role="status">{pluralize(observations.length, 'observation')} correspondant aux critères.</p>
+	{observations.length === 0 ? (
+		<p class="px-5 py-10 text-sm leading-relaxed text-muted sm:px-7">
+			{composition ? 'Aucune composition complète' : 'Aucune association'} n'a encore atteint les {minimumGames} matchs à cinq{associationRoles.length > 0 ? ' pour les rôles sélectionnés' : ''}.
+			Les essais moins fréquents ne sont pas affichés : pas assez de recul.
+		</p>
+	) : (
+		<>
+			<ul class="divide-y divide-gold-700/40">
+				{visible.map((observation) => (
+					<li><DraftRow {observation} {baseline} {composition} /></li>
+				))}
+			</ul>
+			{remaining.length > 0 && (
+				<Disclosure
+					summary={`Voir les ${pluralize(remaining.length, 'autre observation', 'autres observations')}`}
+					class="border-t border-gold-700/40"
+				>
+					<ul class="divide-y divide-gold-700/40 border-t border-gold-700/40">
+						{remaining.map((observation) => (
+							<li><DraftRow {observation} {baseline} {composition} /></li>
+						))}
+					</ul>
+				</Disclosure>
+			)}
+		</>
+	)}
+</Panel>

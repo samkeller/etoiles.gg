@@ -6,18 +6,16 @@ import type { PlayerProfile } from '../../lib/stats';
 
 interface Props {
 	players: readonly PlayerProfile[];
-	fullMatchCount: number;
 }
 
-const { players, fullMatchCount } = Astro.props;
+const { players } = Astro.props;
 ---
 
 <section aria-labelledby="roster-title">
 	<SectionHeading
 		id="roster-title"
-		eyebrow="La composition"
+		eyebrow="Joueurs"
 		title="Les cinq Étoiles"
-		description={`Chaque fiche se lit pour elle-même, sur les ${pluralize(fullMatchCount, 'match joué', 'matchs joués')} à cinq.`}
 	/>
 	{
 		players.length === 0 ? (

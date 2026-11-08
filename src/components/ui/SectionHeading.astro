@@ -3,10 +3,9 @@ interface Props {
 	eyebrow: string;
 	title: string;
 	id: string;
-	description?: string;
 }
 
-const { eyebrow, title, id, description } = Astro.props;
+const { eyebrow, title, id } = Astro.props;
 ---
 
 <header class="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -16,7 +15,6 @@ const { eyebrow, title, id, description } = Astro.props;
 			{eyebrow}
 		</p>
 		<h2 {id} class="mt-2 font-display text-3xl font-bold uppercase tracking-wide text-gold-gradient">{title}</h2>
-		{description && <p class="mt-2 max-w-2xl text-sm text-muted">{description}</p>}
 	</div>
 	<slot />
 </header>

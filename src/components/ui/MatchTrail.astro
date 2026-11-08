@@ -1,0 +1,33 @@
+---
+import { formatDate, formatTime } from '../../lib/format';
+import type { MatchSummary } from '../../lib/stats';
+
+interface Props {
+	matches: readonly MatchSummary[];
+}
+
+const { matches } = Astro.props;
+---
+
+<ol class="flex flex-wrap gap-2" aria-label="Matchs, du plus ancien au plus récent">
+	{matches.map((match) => (
+		<li>
+			<button
+				type="button"
+				data-match-id={match.id}
+				aria-haspopup="dialog"
+				aria-label={`${match.outcome === 'win' ? 'Victoire' : 'Défaite'} du ${formatDate(match.startedAt)} à ${formatTime(match.startedAt)} : ouvrir le match`}
+				title={`${formatDate(match.startedAt)} · ${formatTime(match.startedAt)} · ${match.outcome === 'win' ? 'Victoire' : 'Défaite'}`}
+				class="focus-ring group grid size-7 place-items-center"
+			>
+				<span
+					aria-hidden="true"
+					class:list={[
+						'size-3 rotate-45 border transition-transform group-hover:scale-125',
+						match.outcome === 'win' ? 'border-gold-200 bg-gold-300/60 shadow-glow-gold' : 'border-grey-300/60 bg-loss/50',
+					]}
+				></span>
+			</button>
+		</li>
+	))}
+</ol>

@@ -1,0 +1,2 @@
+- adapter le nom de l'application au nom de domaine.
+- améliorer les performances à l'ouverture d'un match.

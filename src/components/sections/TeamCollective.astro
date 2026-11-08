@@ -1,0 +1,53 @@
+---
+import DraftObservations from "../collective/DraftObservations.astro";
+import MatchTrail from "../ui/MatchTrail.astro";
+import Panel from "../ui/Panel.astro";
+import type { Position } from "../../lib/types";
+import { formatDate, formatPercent, pluralize } from "../../lib/format";
+import type { TeamCollective } from "../../lib/stats";
+import SectionHeading from "../ui/SectionHeading.astro";
+
+interface Props {
+	collective: TeamCollective;
+	associationRoles: readonly Position[];
+}
+
+const { collective, associationRoles } = Astro.props;
+---
+
+<section id="collective-title" aria-label="Collectif">
+	{
+		collective.games === 0 ? (
+			<Panel as="div" class="px-6 py-10">
+				<p class="text-muted">
+					Le récit commencera avec le premier match joué à cinq.
+				</p>
+			</Panel>
+		) : (
+				<SectionHeading
+					id="collective-title"
+					eyebrow="Collectif"
+					title="Notre style de jeu"
+				/>
+
+				<div class="space-y-6">
+					<DraftObservations
+						id="associations-title"
+						title="Associations de champions et joueurs"
+						observations={collective.associations}
+						baseline={collective.winRate!}
+						minimumGames={collective.minimumGames}
+						associationRoles={associationRoles}
+					/>
+					<DraftObservations
+						id="compositions-title"
+						title="Compositions à cinq"
+						observations={collective.compositions}
+						baseline={collective.winRate!}
+						minimumGames={collective.minimumGames}
+						composition
+					/>
+				</div>
+		)
+	}
+</section>

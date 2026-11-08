@@ -2,24 +2,37 @@
 import MatchHistory from '../components/sections/MatchHistory.astro';
 import TeamOverview from '../components/sections/TeamOverview.astro';
 import TeamRoster from '../components/sections/TeamRoster.astro';
+import TeamCollective from '../components/sections/TeamCollective.astro';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { db } from '../lib/db/db';
-import { getMatches, getOverview, getPlayers } from '../lib/stats';
+import { getCollective, getMatches, getOverview, getPlayers } from '../lib/stats';
+import { isPosition } from '../lib/lol';
+import type { Position } from '../lib/types';
+
+const associationRoles: Position[] = [];
+for (const key of ['role', 'role2']) {
+	const value = Astro.url.searchParams.get(key);
+	if (!value) continue;
+	if (!isPosition(value)) return new Response('Rôle invalide : attendu TOP, JUNGLE, MIDDLE, BOTTOM ou UTILITY.', { status: 400 });
+	if (!associationRoles.includes(value)) associationRoles.push(value);
+}
 
 const overview = getOverview(db);
 const players = getPlayers(db);
 const fullMatches = getMatches(db, 'full');
 const partialMatches = getMatches(db, 'partial');
+const collective = getCollective(db, associationRoles);
 const navigation = [
 	{ href: '#team-title', label: 'Équipe' },
-	{ href: '#roster-title', label: 'Joueurs' },
 	{ href: '#history-title', label: 'Historique' },
+	{ href: '#roster-title', label: 'Joueurs' },
+	{ href: '#collective-title', label: 'Collectif' },
 ];
 ---
 
 <BaseLayout>
 	<div class="mx-auto flex min-h-dvh w-full max-w-7xl flex-col px-4 sm:px-8">
-		<header class="flex items-center justify-between gap-6 border-b border-gold-700/60 py-5">
+		<header class="flex flex-wrap items-center justify-between gap-6 border-b border-gold-700/60 py-5">
 			<a href="/" class="focus-ring flex items-center gap-3" aria-label="etoiles.gg, accueil">
 				<img src="/favicon/favicon-32x32.png" alt="" width="32" height="32" class="size-7" />
 				<span class="font-display text-xl font-bold tracking-wide text-ink">
@@ -43,8 +56,9 @@ const navigation = [
 
 		<main class="flex flex-1 flex-col gap-20 py-14 sm:py-20">
 			<TeamOverview overview={overview} />
-			<TeamRoster players={players} fullMatchCount={overview.matchCount} />
 			<MatchHistory fullMatches={fullMatches} partialMatches={partialMatches} />
+			<TeamRoster players={players} />
+			<TeamCollective collective={collective} associationRoles={associationRoles} />
 		</main>
 
 		<footer class="border-t border-gold-700/60 py-5 text-xs leading-relaxed text-muted">

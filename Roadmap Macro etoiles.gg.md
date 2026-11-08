@@ -20,15 +20,19 @@ Les statistiques d'équipe ne comptent que les matchs où les cinq joueurs sont 
 les chiffres de l'équipe. Aucune fonctionnalité ne doit classer ou humilier les joueurs ;
 un MVP de match est une récompense, pas un jugement.
 
-### État vérifié au 7 novembre 2026
+### État vérifié au 8 novembre 2026
 
 - **Interface :** la route `/` affiche en rendu serveur, sur une page unique ancrée
-  (Équipe, Joueurs, Historique) :
+  (Équipe, Joueurs, Collectif, Historique) :
   - le panneau d'équipe : jauge du taux de victoire, forme des 20 derniers matchs à cinq,
     série en cours et indicateurs ;
   - les fiches des cinq joueurs : rôle principal, trois champions signatures avec leur taux
     de victoire, KDA, participation aux kills, part des dégâts, CS/min (vision/min pour le
     support), courbe d'implication (moyenne glissante sur 5 matchs) et meilleure partie ;
+  - le récit collectif : trois plus longues séries de victoires avec résultats cliquables ;
+    associations joueur/champion et compositions
+    rejouées au moins 5 fois, triées par taux de victoire décroissant avec bilan global
+    comme repère et filtre des synergies sur un ou deux rôles ;
   - l'historique des matchs à cinq (10 visibles, les autres repliés) et, dans une zone
     distincte repliée, les matchs partiels de 2 à 4 Étoiles. Les parties à un seul joueur
     ne sont pas des matchs d'équipe et ne sont pas affichées.
@@ -43,8 +47,9 @@ un MVP de match est une récompense, pas un jugement.
   `focus-ring`) sont définis dans `src/styles/global.css`. Les primitives réutilisables
   sont dans `src/components/ui/` (`Panel`, `RingGauge`, `FormStrip`, `Metric`,
   `SectionHeading`, `Disclosure`, `ChampionIcon`, `RoleIcon`, `Avatar`, `MeterBar`,
-  `Sparkline`, `StatRow`), les composants métier dans `src/components/matches/` et
-  `src/components/players/`, et les assemblages de page dans `src/components/sections/`.
+  `Sparkline`, `StatRow`, `MatchTrail`, `WinRateComparison`, `RoleSelect`), les composants métier dans
+  `src/components/matches/`, `src/components/players/` et `src/components/collective/`,
+  et les assemblages de page dans `src/components/sections/`.
 - **Serveur :** Astro 7 en rendu serveur avec adaptateur Node autonome ; Node.js
   `>=22.23.4`.
 - **Ingestion :** `resolvePuids.ts` enregistre un Riot ID dans le roster SQLite ;
@@ -58,12 +63,16 @@ un MVP de match est une récompense, pas un jugement.
 - **Schéma :** tables `players`, `matches`, `participants` et `ingest_runs`, définies dans
   `src/lib/db/schema.sql`. La base est `./etoiles.db` par défaut, surchargeable par
   `DATABASE_PATH`, et ignorée par Git.
-- **Tests :** Vitest teste `getOverview()`, `getMatches()`, `getMatchDetail()` et
-  `getPlayers()` sur SQLite en mémoire, avec des fixtures partagées
+- **Tests :** Vitest teste `getOverview()`, `getMatches()`, `getMatchDetail()`,
+  `getPlayers()` et `getCollective()` sur SQLite en mémoire, avec des fixtures partagées
   (`src/lib/stats/fixtures.ts`) : absence de matchs, exclusion des lineups partiels, séries,
-  forme, détail d'un match, identifiants invalides et enregistrements incomplets.
-- **Pas encore livré :** synergies, timeline collective, cron, hébergement Railway configuré
-  ou healthcheck.
+  forme, détail d'un match, identifiants invalides, enregistrements incomplets, seuil exact
+  de 5 matchs, identité joueur/champion/rôle et séries maximales.
+- **Validation du lot 3 :** 25 tests passent ; check sans erreur (un hint préexistant
+  d'import inutilisé dans `PlayerCard`), build réussi. Rendu desktop/mobile et ouverture
+  du dialog au clic et au clavier vérifiés ; états vide et composition qualifiée vérifiés
+  sur un serveur de production avec SQLite isolée.
+- **Pas encore livré :** cron, hébergement Railway configuré ou healthcheck.
 
 **Limite connue de l'ingestion :** un run demande au plus 100 IDs de match par joueur.
 `--backfill` omet `startTime`, mais ne pagine pas au-delà de cette première page ; plusieurs
@@ -98,7 +107,7 @@ objectifs à confirmer, pas un déploiement existant.
    `prefers-reduced-motion`.
 7. Ajouter de nouvelles colonnes SQLite seulement si les performances l'exigent ; les champs
    détaillés sont déjà conservés dans `raw_json`.
-8. La page expose uniquement les lots livrés (0 à 2). Pas de placeholders, composants ou
+8. La page expose uniquement les lots livrés (0 à 3). Pas de placeholders, composants ou
    dépendances anticipant des lots futurs.
 
 ## 2. Décisions UX et visuelles pour la future interface
@@ -170,13 +179,36 @@ partiels n'affectent aucun indicateur d'équipe.
 
 ### LOT 3 — Récit collectif et synergies
 
-- Ajouter timeline, séries, synergies de champions/joueurs et compositions, avec seuil minimal
-  de matchs pour éviter les conclusions fragiles.
-- Exposer des routes GET dédiées si le rendu serveur ne suffit pas.
-- Rendre les sélections interactives seulement si leur usage est confirmé.
+**État : terminé le 8 novembre 2026.**
 
-**Terminé quand :** les indicateurs excluent les matchs partiels et les seuils de fiabilité
-sont visibles et testés.
+- `getCollective(db)` réutilise les matchs complets et leur validation dans `getMatches`.
+  Chaque résultat des séries ouvre le dialog existant. Les trois séries maximales de victoires les
+  plus longues sont affichées, départagées par récence, y compris une série en cours.
+- Les associations portent sur deux joueurs et leurs champions : les duos de joueurs seuls
+  auraient tous le même bilan puisque les cinq joueurs sont toujours présents. Les
+  compositions exactes tiennent aussi compte des rôles. Les alias Data Dragon sont normalisés.
+- Seuil validé : **5 matchs minimum** par association ou composition. Tri par taux de
+  victoire décroissant, puis nombre de matchs en cas d'égalité ; quatre observations visibles puis les autres
+  repliées. Volumes, victoires/défaites et repère du bilan global sont visibles. Le texte
+  précise que ces petits échantillons qui se recoupent ne prouvent aucune synergie ni causalité.
+- Sur la base actuelle : 9 associations qualifiées, aucune composition exacte à 5 matchs.
+  L'état insuffisant est explicite ; aucun résultat fictif n'est substitué.
+- Le rendu serveur suffit : aucun nouvel endpoint ou îlot client. Primitives `MatchTrail`
+  et `WinRateComparison`, composants métier `DraftRow` et `DraftObservations`, section
+  `TeamCollective` et ancre « Collectif ».
+- Ajustement UX : suppression du titre introductif « Le fil de l'équipe / Ce qu'on
+  construit ensemble » et de la frise « Au fil des mois », y compris son agrégation
+  mensuelle inutilisée ; les séries sont conservées dans un encart compact.
+  Filtre GET des synergies
+  (`role`, `role2`) : un rôle présent dans le duo, ou deux rôles pour le duo précis.
+  L'agrégation et le seuil s'appliquent aux rôles réellement joués dans chaque match ;
+  les autres données collectives ne sont pas filtrées. Rôles invalides : réponse 400.
+- Sélecteurs natifs stylisés via la primitive Tailwind `RoleSelect`, avec icône de rôle
+  Riot actualisée par CSS, focus visible et navigation clavier native ; aucun script ajouté.
+
+**Validé :** exclusion des matchs partiels, seuils 4/5, regroupement et tri, cas vides,
+séries en cours testées ; intégration dialog, clavier
+et rendu mobile vérifiés.
 
 ### LOT 4 — Exploitation et déploiement
 

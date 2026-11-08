@@ -19,6 +19,8 @@ depuis SQLite, présente :
   en cours et meilleure série ;
 - une fiche par joueur : rôle, champions signatures, KDA, participation aux kills, part des
   dégâts, CS ou vision par minute, courbe d'implication et meilleure partie ;
+- le récit collectif : séries de victoires avec résultats cliquables,
+  associations joueur/champion et compositions à cinq ;
 - l'historique des matchs à cinq, avec le détail de chaque match dans une fenêtre, et à
   part les matchs partiels (2 à 4 joueurs), qui ne comptent dans aucune statistique.
 
@@ -33,6 +35,34 @@ Les données sont aussi exposées en JSON (GET) :
 Le style passe par Tailwind ; les tokens de la charte (couleurs, polices, animations)
 sont définis dans `src/styles/global.css` et les composants réutilisables dans
 `src/components/ui/`. Les agrégations sont dans `src/lib/stats/`.
+
+## Lire les observations de draft
+
+Seules les associations et compositions jouées **au moins 5 fois à cinq** sont affichées,
+par taux de victoire décroissant, puis par nombre de matchs en cas d'égalité,
+avec nombre de matchs et bilan V/D. Le trait
+clair sur les barres indique le taux de victoire global de l'équipe.
+
+Une association identifie deux joueurs avec leurs champions ; une composition complète
+identifie les cinq joueurs, champions et rôles. Les duos de joueurs seuls ne sont pas
+comparés : les cinq étant toujours présents, ils auraient tous le même bilan.
+Les petits échantillons et les associations qui se recoupent ne prouvent pas une synergie
+et ne constituent pas une recommandation de draft. Sans cinq matchs pour une composition,
+un état explicite est affiché.
+
+Les synergies peuvent être filtrées sur un rôle (tous les duos qui le contiennent) ou
+deux rôles (ce duo précis). Le bilan et le seuil de 5 matchs sont recalculés sur les
+parties réellement jouées à ces rôles, pas sur le rôle principal ou le dernier rôle du
+joueur. Ce filtre ne modifie ni les séries, ni les compositions complètes.
+Le formulaire fonctionne sans JavaScript et conserve la sélection dans l'URL
+(`?role=JUNGLE&role2=UTILITY#collective-title`) ; « Réinitialiser » retrouve tous les duos.
+Les sélecteurs utilisent la primitive Tailwind `RoleSelect` : cadre Hextech et icône Riot
+du rôle sélectionné, mise à jour par CSS sans JavaScript. Le contrôle natif conserve
+sa navigation clavier et sa liste système sur mobile.
+
+Les séries ne portent que sur les matchs à cinq : les résultats partiels ne les
+interrompent pas. Les résultats des séries
+et le dernier match de chaque observation ouvrent le détail existant, sans nouvel endpoint.
 
 ## Commandes
 

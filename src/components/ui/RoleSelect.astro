@@ -1,0 +1,42 @@
+---
+import { ROLE_ORDER, roleIcon, roleLabel } from '../../lib/lol';
+import type { Position } from '../../lib/types';
+
+interface Props {
+	name: string;
+	label: string;
+	value?: Position;
+}
+
+const { name, label, value } = Astro.props;
+const iconVisibility: Record<Position, string> = {
+	TOP: 'group-has-[option[value=TOP]:checked]:block',
+	JUNGLE: 'group-has-[option[value=JUNGLE]:checked]:block',
+	MIDDLE: 'group-has-[option[value=MIDDLE]:checked]:block',
+	BOTTOM: 'group-has-[option[value=BOTTOM]:checked]:block',
+	UTILITY: 'group-has-[option[value=UTILITY]:checked]:block',
+};
+---
+
+<label class="flex w-full min-w-0 flex-col gap-2 sm:w-52">
+	<span class="label-caps text-muted">{label}</span>
+	<span class="group relative block bg-linear-to-b from-gold-700/20 to-night-950">
+		<select
+			{name}
+			class="focus-ring h-12 w-full appearance-none border border-gold-500/70 bg-transparent pr-10 pl-12 font-display text-base font-bold text-ink transition-colors hover:border-gold-200 focus:border-hextech-300 motion-reduce:transition-none"
+		>
+			<option value="" data-role="all" selected={!value} class="bg-night-900 text-ink">Tous les rôles</option>
+			{ROLE_ORDER.map((role) => (
+				<option value={role} selected={value === role} class="bg-night-900 text-ink">{roleLabel(role)}</option>
+			))}
+		</select>
+		<span aria-hidden="true" class="pointer-events-none absolute inset-y-0 left-3 flex items-center">
+			<img src={roleIcon(null)} alt="" width="34" height="34" class="hidden size-6 object-contain group-has-[option[data-role=all]:checked]:block" />
+			{ROLE_ORDER.map((role) => (
+				<img src={roleIcon(role)} alt="" width="34" height="34" class:list={['hidden size-6 object-contain', iconVisibility[role]]} />
+			))}
+		</span>
+		<span aria-hidden="true" class="pointer-events-none absolute top-5 right-4 size-2 rotate-135 border-t border-r border-gold-200 group-focus-within:border-hextech-300"></span>
+		<span aria-hidden="true" class="pointer-events-none absolute inset-x-3 top-0 h-px bg-linear-to-r from-transparent via-gold-200/60 to-transparent"></span>
+	</span>
+</label>
