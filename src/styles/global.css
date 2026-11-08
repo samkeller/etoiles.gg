@@ -3,7 +3,7 @@
  * Les tokens @theme génèrent les utilitaires Tailwind (bg-night-900, text-win, font-display…).
  * Aucune couleur ne doit être écrite en dur ailleurs que dans ce fichier.
  */
-@import "tailwindcss";
+@import "./tailwind.css";
 
 @font-face {
 	font-family: "Beaufort for LoL";

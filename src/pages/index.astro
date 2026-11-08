@@ -28,8 +28,8 @@ const partialMatches = getMatches(db, 'partial');
 const collective = calculateCollective(fullMatches, associationRoles);
 const navigation = [
 	{ href: '#team-title', label: 'Équipe' },
-	{ href: '#history-title', label: 'Historique' },
 	{ href: '#roster-title', label: 'Joueurs' },
+	{ href: '#history-title', label: 'Historique' },
 	{ href: '#collective-title', label: 'Collectif' },
 ];
 ---
@@ -62,8 +62,8 @@ const navigation = [
 
 		<main class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-20 px-4 py-14 sm:px-8 sm:py-20">
 			<TeamOverview overview={overview} recentMatches={fullMatches.slice(0, overview.recentForm.length).reverse()} />
-			<MatchHistory fullMatches={fullMatches} partialMatches={partialMatches} />
 			<TeamRoster players={players} />
+			<MatchHistory fullMatches={fullMatches} partialMatches={partialMatches} />
 			<TeamCollective collective={collective} associationRoles={associationRoles} />
 		</main>
 
