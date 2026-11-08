@@ -15,6 +15,13 @@ const RECENT_COUNT = 10;
 const { fullMatches, partialMatches } = Astro.props;
 const recent = fullMatches.slice(0, RECENT_COUNT);
 const older = fullMatches.slice(RECENT_COUNT);
+const showOlder = Astro.url.searchParams.get('history') === 'all';
+const showPartial = Astro.url.searchParams.get('partial') === 'show';
+const historyUrl = (key: string, value: string) => {
+	const url = new URL(Astro.url);
+	url.searchParams.set(key, value);
+	return `${url.pathname}${url.search}#history-title`;
+};
 ---
 
 <section aria-labelledby="history-title">
@@ -41,14 +48,19 @@ const older = fullMatches.slice(RECENT_COUNT);
 						<Disclosure
 							summary={`Afficher ${pluralize(older.length, 'match précédent', 'matchs précédents')}`}
 							class="border-t border-gold-700/40"
+							open={showOlder}
+							data-history-src="/partials/history?scope=full"
+							data-history-loaded={showOlder ? 'true' : undefined}
 						>
-							<ol class="divide-y divide-gold-700/40 border-t border-gold-700/40">
+							<div data-history-body>
+							{showOlder ? <ol class="divide-y divide-gold-700/40 border-t border-gold-700/40">
 								{older.map((match) => (
 									<li>
 										<MatchRow match={match} />
 									</li>
 								))}
-							</ol>
+							</ol> : <a href={historyUrl('history', 'all')} class="focus-ring m-5 block text-sm text-hextech-300 underline">Charger les matchs précédents</a>}
+							</div>
 						</Disclosure>
 					)}
 				</>
@@ -62,21 +74,26 @@ const older = fullMatches.slice(RECENT_COUNT);
 				summary={`Matchs partiels · ${partialMatches.length}`}
 				hint="Parties à 2, 3 ou 4 Étoiles. Elles ne comptent dans aucune statistique d'équipe."
 				class="mt-6 border border-dashed border-grey-700 bg-night-950/40"
+				open={showPartial}
+				data-history-src="/partials/history?scope=partial"
+				data-history-loaded={showPartial ? 'true' : undefined}
 			>
-				<ol class="divide-y divide-grey-700/60 border-t border-dashed border-grey-700">
+				<div data-history-body>
+				{showPartial ? <ol class="divide-y divide-grey-700/60 border-t border-dashed border-grey-700">
 					{partialMatches.map((match) => (
 						<li>
 							<MatchRow match={match} />
 						</li>
 					))}
-				</ol>
+				</ol> : <a href={historyUrl('partial', 'show')} class="focus-ring m-5 block text-sm text-hextech-300 underline">Charger les matchs partiels</a>}
+				</div>
 			</Disclosure>
 		)
 	}
 
 	<dialog
 		id="match-dialog"
-		aria-labelledby="match-dialog-title"
+		aria-label="Détail du match"
 		class="m-auto max-h-[90dvh] w-[min(60rem,calc(100%-1.5rem))] overflow-visible bg-transparent p-0 text-ink backdrop:bg-night-950/80 backdrop:backdrop-blur-sm"
 	>
 		<Panel as="div" class="px-5 py-6 sm:px-8">
@@ -94,23 +111,27 @@ const older = fullMatches.slice(RECENT_COUNT);
 	</dialog>
 
 	<template id="match-dialog-loading">
-		<p id="match-dialog-title" class="label-caps animate-pulse py-16 text-center text-muted motion-reduce:animate-none">
+		<p class="label-caps animate-pulse py-16 text-center text-muted motion-reduce:animate-none">
 			Chargement du match…
 		</p>
 	</template>
 	<template id="match-dialog-error">
-		<p id="match-dialog-title" class="py-16 text-center text-muted">
+		<p class="pt-16 pb-4 text-center text-muted">
 			Ce match n'a pas pu être chargé. Réessayez dans un instant.
 		</p>
+		<button type="button" data-match-retry class="focus-ring mx-auto mb-10 block border border-hextech-300/40 px-4 py-2 text-hextech-300">Réessayer</button>
 	</template>
 </section>
 
 <script>
+	import { createMatchLoader } from '../../lib/match-loader';
 	const dialog = document.querySelector<HTMLDialogElement>('#match-dialog');
 	const body = dialog?.querySelector<HTMLElement>('[data-dialog-body]');
 	const loading = document.querySelector<HTMLTemplateElement>('#match-dialog-loading');
 	const failure = document.querySelector<HTMLTemplateElement>('#match-dialog-error');
-	let pendingId: string | null = null;
+	const loader = createMatchLoader();
+	let selectedId: string | null = null;
+	let renderSequence = 0;
 
 	function showTemplate(template: HTMLTemplateElement | null) {
 		if (body && template) body.replaceChildren(template.content.cloneNode(true));
@@ -118,22 +139,33 @@ const older = fullMatches.slice(RECENT_COUNT);
 
 	async function openMatch(matchId: string) {
 		if (!dialog || !body) return;
-		pendingId = matchId;
+		selectedId = matchId;
+		const request = ++renderSequence;
 		showTemplate(loading);
+		body.setAttribute('aria-busy', 'true');
+		body.scrollTop = 0;
 		if (!dialog.open) dialog.showModal();
 
 		try {
-			const response = await fetch(`/partials/matches/${encodeURIComponent(matchId)}`);
-			if (!response.ok) throw new Error(String(response.status));
-			const html = await response.text();
-			if (pendingId === matchId) body.innerHTML = html;
-		} catch {
-			if (pendingId === matchId) showTemplate(failure);
+			const html = await loader.load(matchId);
+			if (html !== null && request === renderSequence) {
+				body.innerHTML = html;
+				body.scrollTop = 0;
+			}
+		} catch (error) {
+			if (request === renderSequence) {
+				console.error('Impossible de charger le détail du match.', error);
+				showTemplate(failure);
+			}
+		} finally {
+			if (request === renderSequence) body.setAttribute('aria-busy', 'false');
 		}
 	}
 
 	document.addEventListener('click', (event) => {
-		const trigger = (event.target as Element | null)?.closest<HTMLElement>('[data-match-id]');
+		if (!(event.target instanceof Element)) return;
+		if (event.target.closest('[data-match-retry]') && selectedId) void openMatch(selectedId);
+		const trigger = event.target.closest<HTMLElement>('[data-match-id]');
 		if (trigger?.dataset.matchId) void openMatch(trigger.dataset.matchId);
 	});
 
@@ -142,6 +174,41 @@ const older = fullMatches.slice(RECENT_COUNT);
 	});
 
 	dialog?.addEventListener('close', () => {
-		pendingId = null;
+		if (dialog.open) return;
+		selectedId = null;
+		renderSequence += 1;
+		loader.cancel();
+		body?.setAttribute('aria-busy', 'false');
 	});
+
+	for (const disclosure of document.querySelectorAll<HTMLDetailsElement>('[data-history-src]')) {
+		const listBody = disclosure.querySelector<HTMLElement>('[data-history-body]');
+		const source = disclosure.dataset.historySrc;
+		if (!listBody || !source) continue;
+		let loadingList = false;
+		const loadList = async () => {
+			if (loadingList || disclosure.dataset.historyLoaded === 'true') return;
+			loadingList = true;
+			listBody.setAttribute('aria-busy', 'true');
+			const status = document.createElement('p');
+			status.className = 'm-5 text-sm text-muted';
+			status.textContent = 'Chargement des matchs…';
+			listBody.prepend(status);
+			try {
+				const response = await fetch(source);
+				if (!response.ok) throw new Error(`Historique : HTTP ${response.status}`);
+				listBody.innerHTML = await response.text();
+				disclosure.dataset.historyLoaded = 'true';
+			} catch (error) {
+				console.error('Impossible de charger l’historique.', error);
+				status.textContent = 'Chargement impossible. Utilisez le lien ci-dessous pour réessayer.';
+			} finally {
+				listBody.setAttribute('aria-busy', 'false');
+				loadingList = false;
+			}
+		};
+		disclosure.addEventListener('toggle', () => {
+			if (disclosure.open) void loadList();
+		});
+	}
 </script>

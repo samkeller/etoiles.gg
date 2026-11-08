@@ -1,0 +1,14 @@
+---
+import MatchRow from '../../components/matches/MatchRow.astro';
+import { db } from '../../lib/db/db';
+import { getMatches } from '../../lib/stats';
+
+export const partial = true;
+const scope = Astro.url.searchParams.get('scope');
+if (scope !== 'full' && scope !== 'partial') return new Response('Scope invalide.', { status: 400 });
+const matches = getMatches(db, scope).slice(scope === 'full' ? 10 : 0);
+---
+
+<ol class="divide-y divide-gold-700/40">
+	{matches.map((match) => <li><MatchRow {match} /></li>)}
+</ol>

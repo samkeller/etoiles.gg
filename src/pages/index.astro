@@ -5,9 +5,10 @@ import TeamRoster from '../components/sections/TeamRoster.astro';
 import TeamCollective from '../components/sections/TeamCollective.astro';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { db } from '../lib/db/db';
-import { getCollective, getMatches, getOverview, getPlayers } from '../lib/stats';
+import { calculateCollective, getMatches, getOverview, getPlayers } from '../lib/stats';
 import { isPosition } from '../lib/lol';
 import type { Position } from '../lib/types';
+import { SITE_NAME } from '../lib/site';
 
 const associationRoles: Position[] = [];
 for (const key of ['role', 'role2']) {
@@ -21,7 +22,7 @@ const overview = getOverview(db);
 const players = getPlayers(db);
 const fullMatches = getMatches(db, 'full');
 const partialMatches = getMatches(db, 'partial');
-const collective = getCollective(db, associationRoles);
+const collective = calculateCollective(fullMatches, associationRoles);
 const navigation = [
 	{ href: '#team-title', label: 'Équipe' },
 	{ href: '#history-title', label: 'Historique' },
@@ -31,12 +32,13 @@ const navigation = [
 ---
 
 <BaseLayout>
-	<div class="mx-auto flex min-h-dvh w-full max-w-7xl flex-col px-4 sm:px-8">
-		<header class="flex flex-wrap items-center justify-between gap-6 border-b border-gold-700/60 py-5">
-			<a href="/" class="focus-ring flex items-center gap-3" aria-label="etoiles.gg, accueil">
+	<div class="flex min-h-dvh w-full flex-col">
+		<header class="sticky top-0 z-30 w-full border-b border-gold-700/60 bg-night-950">
+			<div class="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-x-6 gap-y-3 px-4 py-4 sm:px-8">
+			<a href="/" class="focus-ring flex items-center gap-3" aria-label={`${SITE_NAME}, accueil`}>
 				<img src="/logo_clean.png" alt="" width="32" height="32" class="size-7" />
 				<span class="font-display text-xl font-bold tracking-wide text-ink">
-					etoiles<span class="text-gold-200">.gg</span>
+					{SITE_NAME}
 				</span>
 			</a>
 			<nav aria-label="Sections">
@@ -52,20 +54,23 @@ const navigation = [
 					}
 				</ul>
 			</nav>
+			</div>
 		</header>
 
-		<main class="flex flex-1 flex-col gap-20 py-14 sm:py-20">
-			<TeamOverview overview={overview} />
+		<main class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-20 px-4 py-14 sm:px-8 sm:py-20">
+			<TeamOverview overview={overview} recentMatches={fullMatches.slice(0, overview.recentForm.length).reverse()} />
 			<MatchHistory fullMatches={fullMatches} partialMatches={partialMatches} />
 			<TeamRoster players={players} />
 			<TeamCollective collective={collective} associationRoles={associationRoles} />
 		</main>
 
-		<footer class="border-t border-gold-700/60 py-5 text-xs leading-relaxed text-muted">
-			etoiles.gg n'est pas approuvé par Riot Games et ne reflète pas les opinions de Riot Games ni
+		<footer class="mx-auto w-full max-w-7xl px-4 sm:px-8">
+			<p class="border-t border-gold-700/60 py-5 text-xs leading-relaxed text-muted">
+			{SITE_NAME} n'est pas approuvé par Riot Games et ne reflète pas les opinions de Riot Games ni
 			de quiconque officiellement impliqué dans la production ou la gestion des propriétés de Riot
 			Games. Riot Games et toutes les propriétés associées sont des marques commerciales ou des
 			marques déposées de Riot Games, Inc.
+			</p>
 		</footer>
 	</div>
 </BaseLayout>

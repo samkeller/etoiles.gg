@@ -5,8 +5,10 @@ import type { Position } from '../types';
 
 export const MIN_DRAFT_GAMES = 5;
 
-export interface WinStreak {
-	matches: MatchSummary[];
+export interface PendingDraftObservation {
+	members: Pick<MatchMember, 'puuid' | 'name' | 'champion' | 'role'>[];
+	games: number;
+	latestMatchId: string;
 }
 
 export interface DraftObservation {
@@ -21,10 +23,10 @@ export interface TeamCollective {
 	games: number;
 	winRate: number | null;
 	minimumGames: number;
-	/** Séries d'au moins deux victoires, par longueur puis récence. */
-	streaks: WinStreak[];
 	associations: DraftObservation[];
 	compositions: DraftObservation[];
+	pendingAssociations: PendingDraftObservation[];
+	pendingCompositions: PendingDraftObservation[];
 }
 
 interface DraftGroup {
@@ -73,27 +75,33 @@ function observations(groups: Map<string, DraftGroup>): DraftObservation[] {
 		.map(({ key, ...observation }) => observation);
 }
 
+function pendingObservations(groups: Map<string, DraftGroup>): PendingDraftObservation[] {
+	return [...groups.entries()]
+		.filter(([, group]) => group.matches.length === MIN_DRAFT_GAMES - 1)
+		.sort(([left], [right]) => left.localeCompare(right))
+		.map(([, group]) => ({
+			members: [...group.members]
+				.sort((left, right) => compareRoles(left.role, right.role) || left.puuid.localeCompare(right.puuid))
+				.map(({ puuid, name, champion, role }) => ({ puuid, name, champion, role })),
+			games: group.matches.length,
+			latestMatchId: group.matches.at(-1)!.id,
+		}));
+}
+
 export function getCollective(database: Database.Database, associationRoles: readonly Position[] = []): TeamCollective {
-	// Reuse the full-lineup validation and filtering from the match history.
-	const matches = getMatches(database).reverse();
+	return calculateCollective(getMatches(database), associationRoles);
+}
+
+/** Consumes already validated full-team summaries, avoiding a second database read on the page. */
+export function calculateCollective(fullMatches: readonly MatchSummary[], associationRoles: readonly Position[] = []): TeamCollective {
+	if (fullMatches.some((match) => match.lineupSize !== 5)) throw new Error('Collective statistics require full-team matches.');
+	const matches = [...fullMatches].sort((left, right) => left.startedAt - right.startedAt || left.id.localeCompare(right.id));
 	const associations = new Map<string, DraftGroup>();
 	const compositions = new Map<string, DraftGroup>();
-	const streaks: WinStreak[] = [];
-	let runningWins: MatchSummary[] = [];
 	let wins = 0;
 
-	const finishStreak = () => {
-		if (runningWins.length >= 2) streaks.push({ matches: runningWins });
-		runningWins = [];
-	};
-
 	for (const match of matches) {
-		if (match.outcome === 'win') {
-			wins += 1;
-			runningWins.push(match);
-		} else {
-			finishStreak();
-		}
+		if (match.outcome === 'win') wins += 1;
 
 		for (let left = 0; left < match.members.length; left += 1) {
 			for (let right = left + 1; right < match.members.length; right += 1) {
@@ -105,18 +113,13 @@ export function getCollective(database: Database.Database, associationRoles: rea
 		}
 		addGroup(compositions, match.members, match, true);
 	}
-	finishStreak();
-	streaks.sort((left, right) =>
-		right.matches.length - left.matches.length ||
-		right.matches.at(-1)!.startedAt - left.matches.at(-1)!.startedAt,
-	);
-
 	return {
 		games: matches.length,
 		winRate: matches.length === 0 ? null : wins / matches.length,
 		minimumGames: MIN_DRAFT_GAMES,
-		streaks,
 		associations: observations(associations),
 		compositions: observations(compositions),
+		pendingAssociations: pendingObservations(associations),
+		pendingCompositions: pendingObservations(compositions),
 	};
 }

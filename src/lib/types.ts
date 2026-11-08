@@ -23,6 +23,8 @@ export interface ParticipantDto {
     goldEarned: number;
     totalDamageDealtToChampions: number;
     visionScore: number;
+    summoner1Id?: number;
+    summoner2Id?: number;
 }
 
 export type Position = | 'TOP' | 'JUNGLE' | 'MIDDLE' | 'BOTTOM' | 'UTILITY';

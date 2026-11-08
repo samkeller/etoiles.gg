@@ -6,26 +6,24 @@
  *  PUUIDs, gravés en base. Argument : "Pseudo#TAG" → players.
  * ═════════════════════════════════════════════════════════════════
  */
-import { getPuuid } from '../lib/riot.js';
+import { getPuuid, parseRiotId } from '../lib/riot.js';
 import { db } from '../lib/db/db.js';
+import { log } from './log';
 
-if (!process.env.RIOT_API_KEY) {
-    throw new Error("La variable d'environnement RIOT_API_KEY est requise");
+try {
+    const riotId = process.argv[2];
+    if (!riotId) throw new Error('Usage : npm run resolvePuids -- "Pseudo#TAG"');
+    const [name, tag] = parseRiotId(riotId);
+    const puuid = await getPuuid(riotId);
+    db.prepare(`
+      INSERT INTO players (puuid, game_name, tag_line) VALUES (?, ?, ?)
+      ON CONFLICT(puuid) DO UPDATE SET game_name = excluded.game_name,
+                                      tag_line = excluded.tag_line
+    `).run(puuid, name, tag);
+    log.info(`★ ${name}#${tag} → enregistré`);
+} catch (error) {
+    log.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+} finally {
+    db.close();
 }
-
-const riotId = process.argv[2];
-if (!riotId) {
-    console.error('Usage : npm run resolvePuids -- "Pseudo#TAG"');
-    process.exit(1);
-}
-
-const puuid = await getPuuid(riotId);
-const [name, tag] = riotId.split('#');
-
-db.prepare(`
-  INSERT INTO players (puuid, game_name, tag_line) VALUES (?, ?, ?)
-  ON CONFLICT(puuid) DO UPDATE SET game_name = excluded.game_name,
-                                  tag_line = excluded.tag_line
-`).run(puuid, name, tag);
-
-console.log(`★ ${name}#${tag} → enregistré [${puuid}]`);

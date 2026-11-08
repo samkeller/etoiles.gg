@@ -1,5 +1,6 @@
 ---
 interface Props {
+	id: string;
 	/** Valeurs chronologiques. */
 	values: readonly number[];
 	/** Ligne de référence (ex. moyenne), tracée en pointillés. */
@@ -7,7 +8,7 @@ interface Props {
 	class?: string;
 }
 
-const { values, baseline = null, class: className } = Astro.props;
+const { id, values, baseline = null, class: className } = Astro.props;
 
 const WIDTH = 200;
 const HEIGHT = 48;
@@ -20,7 +21,7 @@ const x = (index: number) => (values.length === 1 ? WIDTH / 2 : (index / (values
 const y = (value: number) => PADDING + (1 - (value - min) / span) * (HEIGHT - PADDING * 2);
 const line = values.map((value, index) => `${x(index).toFixed(1)},${y(value).toFixed(1)}`).join(' ');
 const area = `0,${HEIGHT} ${line} ${WIDTH},${HEIGHT}`;
-const gradientId = `spark-${Math.random().toString(36).slice(2, 9)}`;
+const gradientId = `spark-${id}`;
 ---
 
 {

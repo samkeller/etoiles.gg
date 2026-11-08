@@ -12,6 +12,7 @@ import {
 } from "../../lib/format";
 import type { MatchDetail, MatchTeamObjectives } from "../../lib/stats";
 import UiIcon from "../ui/UiIcon.astro";
+import SummonerSpell from '../ui/SummonerSpell.astro';
 
 interface Props {
 	detail: MatchDetail;
@@ -29,29 +30,36 @@ const maxDamage = Math.max(
 const objectives: {
 	key: keyof MatchTeamObjectives;
 	label: string;
+	icon: 'towers' | 'inhibitors' | 'dragons' | 'heralds' | 'barons' | null;
 }[] = [
 	{
 		key: "towers",
+		icon: 'towers',
 		label: "Tours",
 	},
 	{
 		key: "inhibitors",
+		icon: 'inhibitors',
 		label: "Inhib.",
 	},
 	{
 		key: "dragons",
+		icon: 'dragons',
 		label: "Dragons",
 	},
 	{
 		key: "voidgrubs",
+		icon: null,
 		label: "Larves",
 	},
 	{
 		key: "heralds",
+		icon: 'heralds',
 		label: "Héraut",
 	},
 	{
 		key: "barons",
+		icon: 'barons',
 		label: "Barons",
 	},
 ];
@@ -88,7 +96,6 @@ const objectives: {
 				}
 			</p>
 		</div>
-		<!-- Todo; remplacer par opgg -->
 		<a
 			href={detail.externalUrl}
 			target="_blank"
@@ -136,9 +143,9 @@ const objectives: {
 								{formatCompact(team.gold)}
 							</dd>
 						</div>
-						{objectives.map(({ key, label }) => (
+						{objectives.map(({ key, label, icon }) => (
 							<div class="flex gap-1.5">
-								<UiIcon key={key as any} size="sm" />
+								{icon && <UiIcon key={icon} size="sm" />}
 								<dt class="text-muted">{label}</dt>
 								<dd class="font-semibold tabular-nums text-ink">
 									{team.objectives[key]}
@@ -149,13 +156,13 @@ const objectives: {
 				</div>
 
 				<table class="mt-1 w-full text-sm">
-					<thead class="sr-only">
+					<thead class="text-xs text-muted">
 						<tr>
 							<th scope="col">Joueur</th>
 							<th scope="col">KDA</th>
-							<th scope="col">CS</th>
-							<th scope="col">Vision</th>
-							<th scope="col">Dégâts aux champions</th>
+							<th scope="col" class="max-sm:hidden">CS</th>
+							<th scope="col" class="max-md:hidden">Vision</th>
+							<th scope="col" class="max-sm:hidden">Dégâts</th>
 						</tr>
 					</thead>
 					<tbody class="divide-y divide-gold-700/25">
@@ -179,12 +186,16 @@ const objectives: {
 												champion={participant.champion}
 												size="md"
 												outcome={team.outcome}
+												loading="eager"
 											/>
 											<span class="absolute -right-1 -bottom-1 grid min-w-4 place-items-center bg-night-950 px-0.5 text-[0.625rem] tabular-nums text-muted">
 												{participant.championLevel}
 											</span>
 										</span>
-										{/* TODO: ajouter summoners spells icons. */}
+										<span class="flex flex-col gap-1">
+											<SummonerSpell id={participant.summonerSpells[0]} />
+											<SummonerSpell id={participant.summonerSpells[1]} />
+										</span>
 										<span
 											class:list={[
 												"truncate",

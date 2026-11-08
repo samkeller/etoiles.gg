@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import { SITE_NAME, TEAM_NAME } from '../lib/site';
 
 interface Props {
 	title?: string;
@@ -7,8 +8,8 @@ interface Props {
 }
 
 const {
-	title = "Les Étoiles de l'Esport — etoiles.gg",
-	description = "Le carnet de bord des Étoiles de l'Esport : nos matchs joués à cinq.",
+	title = `${TEAM_NAME} — ${SITE_NAME}`,
+	description = `Le carnet de bord de ${TEAM_NAME} : nos matchs joués à cinq.`,
 } = Astro.props;
 ---
 
@@ -24,7 +25,7 @@ const {
 		<link rel="apple-touch-icon" href="/favicon/apple-touch-icon.png" />
 	</head>
 	<body
-		class="min-h-dvh bg-night-950 bg-[url(/riot/background.png)] bg-cover bg-fixed bg-center font-body text-ink antialiased"
+		class="relative isolate min-h-dvh bg-night-950 font-body text-ink antialiased before:pointer-events-none before:fixed before:inset-0 before:-z-10 before:bg-[url(/riot/background.png)] before:bg-cover before:bg-center before:bg-no-repeat before:content-['']"
 	>
 		<slot />
 	</body>

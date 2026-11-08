@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3';
-import { compareRoles, isPosition } from '../lol';
+import { championId, compareRoles, isPosition } from '../lol';
 import type { Position } from '../types';
-import { kdaRatio, minutes, parseMatchInfo, ratio, toOutcome, type MatchOutcome } from './shared';
+import { kdaRatio, minutes, validatedLineup, ratio, toOutcome, type MatchOutcome, type StoredMember } from './shared';
 
 /** Fenêtre de la moyenne glissante utilisée pour la courbe de progression. */
 export const PROGRESSION_WINDOW = 5;
@@ -95,19 +95,33 @@ export function getPlayers(database: Database.Database): PlayerProfile[] {
 			SELECT m.match_id AS id, m.game_start_ts AS startedAt, m.duration_s AS durationS, m.raw_json AS rawJson
 			FROM matches AS m
 			WHERE EXISTS (SELECT 1 FROM participants AS p WHERE p.match_id = m.match_id AND p.lineup_size = 5)
+				OR (SELECT COUNT(*) FROM participants AS p WHERE p.match_id = m.match_id) >= 5
 			ORDER BY m.game_start_ts ASC, m.match_id
 		`)
 		.all() as FullMatchRow[];
 
 	const lines = new Map<string, GameLine[]>(players.map((player) => [player.puuid, []]));
+	const storedRows = database.prepare(`SELECT p.match_id AS id, p.puuid, p.win, p.lineup_size AS lineupSize,
+		p.champion, p.role, p.kills, p.deaths, p.assists FROM participants AS p
+		WHERE EXISTS (SELECT 1 FROM participants AS candidate WHERE candidate.match_id = p.match_id AND candidate.lineup_size = 5)
+			OR (SELECT COUNT(*) FROM participants AS candidate WHERE candidate.match_id = p.match_id) >= 5`)
+		.all() as (StoredMember & { id: string })[];
+	const storedByMatch = new Map<string, StoredMember[]>();
+	for (const row of storedRows) {
+		const members = storedByMatch.get(row.id) ?? [];
+		members.push(row);
+		storedByMatch.set(row.id, members);
+	}
 
 	for (const match of matches) {
 		if (match.rawJson === null || match.startedAt === null || match.durationS === null) {
 			throw new Error(`Missing raw data for full-team match ${match.id}.`);
 		}
-		const info = parseMatchInfo(match.rawJson);
+		const { info, members } = validatedLineup(database, match.id, match.rawJson, match.startedAt, match.durationS, storedByMatch.get(match.id) ?? []);
+		const memberIds = new Set(members.map((member) => member.puuid));
 
 		for (const participant of info.participants) {
+			if (!memberIds.has(participant.puuid)) continue;
 			const playerLines = lines.get(participant.puuid);
 			if (!playerLines) continue;
 
@@ -116,7 +130,7 @@ export function getPlayers(database: Database.Database): PlayerProfile[] {
 				matchId: match.id,
 				startedAt: match.startedAt,
 				minutes: minutes(match.durationS),
-				champion: participant.championName,
+				champion: championId(participant.championName),
 				role: isPosition(participant.individualPosition) ? participant.individualPosition : null,
 				won: participant.win,
 				kills: participant.kills,

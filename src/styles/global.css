@@ -110,6 +110,7 @@
 @layer base {
 	html {
 		color-scheme: dark;
+		scroll-padding-top: 8rem;
 	}
 
 	::selection {

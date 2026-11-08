@@ -4,20 +4,21 @@ import Disclosure from '../ui/Disclosure.astro';
 import Panel from '../ui/Panel.astro';
 import RoleSelect from '../ui/RoleSelect.astro';
 import { pluralize } from '../../lib/format';
-import type { DraftObservation } from '../../lib/stats';
+import type { DraftObservation, PendingDraftObservation } from '../../lib/stats';
 import type { Position } from '../../lib/types';
 
 interface Props {
 	title: string;
 	id: string;
 	observations: readonly DraftObservation[];
+	pending: readonly PendingDraftObservation[];
 	baseline: number;
 	minimumGames: number;
 	composition?: boolean;
 	associationRoles?: readonly Position[];
 }
 
-const { title, id, observations, baseline, minimumGames, composition = false, associationRoles = [] } = Astro.props;
+const { title, id, observations, pending, baseline, minimumGames, composition = false, associationRoles = [] } = Astro.props;
 const visible = observations.slice(0, 4);
 const remaining = observations.slice(4);
 ---
@@ -52,7 +53,6 @@ const remaining = observations.slice(4);
 	{observations.length === 0 ? (
 		<p class="px-5 py-10 text-sm leading-relaxed text-muted sm:px-7">
 			{composition ? 'Aucune composition complète' : 'Aucune association'} n'a encore atteint les {minimumGames} matchs à cinq{associationRoles.length > 0 ? ' pour les rôles sélectionnés' : ''}.
-			Les essais moins fréquents ne sont pas affichés : pas assez de recul.
 		</p>
 	) : (
 		<>
@@ -69,6 +69,16 @@ const remaining = observations.slice(4);
 					<ul class="divide-y divide-gold-700/40 border-t border-gold-700/40">
 						{remaining.map((observation) => (
 							<li><DraftRow {observation} {baseline} {composition} /></li>
+						))}
+					</ul>
+				</Disclosure>
+			)}
+			{pending.length > 0 && (
+				<Disclosure summary={`Encore un match · ${pluralize(pending.length, 'association à confirmer', 'associations à confirmer')}`}
+					class="border-t border-hextech-300/30">
+					<ul class="divide-y divide-gold-700/40">
+						{pending.map((observation) => (
+							<li><DraftRow {observation} {baseline} {composition} minimumGames={minimumGames} /></li>
 						))}
 					</ul>
 				</Disclosure>

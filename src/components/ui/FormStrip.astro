@@ -1,32 +1,33 @@
 ---
-import type { MatchOutcome } from '../../lib/stats';
+import type { MatchSummary } from '../../lib/stats';
+import { formatDate, formatTime } from '../../lib/format';
 
 interface Props {
 	/** Résultats du plus ancien au plus récent. */
-	results: readonly MatchOutcome[];
+	matches: readonly MatchSummary[];
 	/** Nombre de résultats finaux appartenant à la série en cours. */
 	streakCount?: number;
 	class?: string;
 }
 
-const { results, streakCount = 0, class: className } = Astro.props;
-const streakStart = results.length - streakCount;
+const { matches, streakCount = 0, class: className } = Astro.props;
+const streakStart = matches.length - streakCount;
 ---
 
 <ol class:list={['grid grid-cols-10 gap-x-2 gap-y-4 sm:grid-cols-20', className]}>
 	{
-		results.map((result, index) => {
-			const isWin = result === 'win';
+		matches.map((match, index) => {
+			const isWin = match.outcome === 'win';
 			const inStreak = index >= streakStart;
 			return (
-				// TODO: ce composant pourrait être un boutton
 				<li
 					class="flex animate-rise justify-center motion-reduce:animate-none"
 					style={`animation-delay: ${index * 35}ms`}
 				>
-					<span
+					<button type="button" data-match-id={match.id} aria-haspopup="dialog"
+						aria-label={`${isWin ? 'Victoire' : 'Défaite'} du ${formatDate(match.startedAt)} à ${formatTime(match.startedAt)} : ouvrir le match`}
 						class:list={[
-							'grid size-5 rotate-45 place-items-center border',
+							'focus-ring grid size-7 rotate-45 place-items-center border transition-transform hover:scale-110',
 							isWin ? 'border-gold-300 bg-gold-700/70' : 'border-grey-700 bg-night-800/90',
 							inStreak && isWin && 'border-gold-100 shadow-glow-gold',
 							inStreak && !isWin && 'border-grey-300/60',
@@ -39,8 +40,7 @@ const streakStart = results.length - streakCount;
 							height="24"
 							class:list={['size-3.5 -rotate-45', !isWin && 'opacity-80']}
 						/>
-					</span>
-					<span class="sr-only">{isWin ? 'Victoire' : 'Défaite'}</span>
+					</button>
 				</li>
 			);
 		})

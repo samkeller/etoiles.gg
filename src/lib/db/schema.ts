@@ -1,3 +1,4 @@
+export const SCHEMA = `
 CREATE TABLE IF NOT EXISTS players (
   puuid       TEXT PRIMARY KEY,
   game_name   TEXT,
@@ -5,7 +6,7 @@ CREATE TABLE IF NOT EXISTS players (
 );
 
 CREATE TABLE IF NOT EXISTS matches (
-  match_id      TEXT PRIMARY KEY,     -- ex: EUW1_1234567890
+  match_id      TEXT PRIMARY KEY,
   game_start_ts INTEGER,
   duration_s    INTEGER,
   queue_id      INTEGER,
@@ -21,7 +22,7 @@ CREATE TABLE IF NOT EXISTS participants (
   deaths     INTEGER,
   assists    INTEGER,
   win        INTEGER,
-  lineup_size INTEGER,   -- nb de joueurs de l'équipe présents dans CE match
+  lineup_size INTEGER,
   PRIMARY KEY (match_id, puuid)
 );
 
@@ -30,3 +31,13 @@ CREATE TABLE IF NOT EXISTS ingest_runs (
   new_matches  INTEGER,
   status       TEXT
 );
+
+CREATE TABLE IF NOT EXISTS ingest_pending (
+  match_id TEXT PRIMARY KEY
+);
+
+CREATE TABLE IF NOT EXISTS ingest_cursors (
+  puuid TEXT PRIMARY KEY,
+  start_time INTEGER NOT NULL
+);
+`;

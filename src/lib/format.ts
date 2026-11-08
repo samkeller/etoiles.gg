@@ -58,9 +58,10 @@ export function formatKda(kills: number, deaths: number, assists: number): strin
 }
 
 export function formatKdaIndicator(kills: number, deaths: number, assists: number): string {
-	return (+((kills + assists) / Math.max(1, deaths)).toFixed(2)).toString()
+	return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(kdaRatio(kills, deaths, assists));
 }
 
 export function pluralize(count: number, singular: string, plural = `${singular}s`): string {
 	return `${count.toLocaleString('fr-FR')} ${count === 1 ? singular : plural}`;
 }
+import { kdaRatio } from './stats/shared';

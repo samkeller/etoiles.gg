@@ -1,12 +1,12 @@
 import Database from 'better-sqlite3';
-import { readFileSync } from 'node:fs';
+import { SCHEMA } from '../db/schema';
 import type { MatchDto, ParticipantDto, Position, TeamId } from '../types';
 
 const openDatabases: Database.Database[] = [];
 
 export function createTestDatabase(): Database.Database {
 	const database = new Database(':memory:');
-	database.exec(readFileSync(new URL('../db/schema.sql', import.meta.url), 'utf8'));
+	database.exec(SCHEMA);
 	openDatabases.push(database);
 	return database;
 }

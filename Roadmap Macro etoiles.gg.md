@@ -23,23 +23,25 @@ un MVP de match est une récompense, pas un jugement.
 ### État vérifié au 8 novembre 2026
 
 - **Interface :** la route `/` affiche en rendu serveur, sur une page unique ancrée
-  (Équipe, Joueurs, Collectif, Historique) :
+  (Équipe, Historique, Joueurs, Collectif), avec menu sticky :
   - le panneau d'équipe : jauge du taux de victoire, forme des 20 derniers matchs à cinq,
     série en cours et indicateurs ;
   - les fiches des cinq joueurs : rôle principal, trois champions signatures avec leur taux
     de victoire, KDA, participation aux kills, part des dégâts, CS/min (vision/min pour le
     support), courbe d'implication (moyenne glissante sur 5 matchs) et meilleure partie ;
-  - le récit collectif : trois plus longues séries de victoires avec résultats cliquables ;
-    associations joueur/champion et compositions
+  - le collectif : associations joueur/champion et compositions
     rejouées au moins 5 fois, triées par taux de victoire décroissant avec bilan global
-    comme repère et filtre des synergies sur un ou deux rôles ;
-  - l'historique des matchs à cinq (10 visibles, les autres repliés) et, dans une zone
+    comme repère et filtre des synergies sur un ou deux rôles ; à 4/5 matchs, associations
+    et compositions visibles sans statistique de performance pour encourager un prochain match ;
+  - l'historique des matchs à cinq (10 visibles, les autres chargés à l'ouverture) et, dans une zone
     distincte repliée, les matchs partiels de 2 à 4 Étoiles. Les parties à un seul joueur
     ne sont pas des matchs d'équipe et ne sont pas affichées.
   Un clic sur un match (ou sur une « meilleure partie ») ouvre un `<dialog>` natif dont le
   contenu est un fragment HTML rendu par le serveur (`/partials/matches/{id}`) : les deux
   équipes, leurs objectifs, la feuille de chaque joueur et un lien League of Graphs
-  (`rel="noopener noreferrer"`). Le seul JavaScript client est ce petit script du dialog.
+  (`rel="noopener noreferrer"`), ainsi que les sorts d'invocateur. Le script du dialog
+  met en cache jusqu'à 40 fragments, annule les requêtes obsolètes et propose une relance.
+  Les historiques repliés sont chargés à l'ouverture avec une alternative GET sans JavaScript.
 - **API :** GET `/api/matches.json?scope=full|partial`, `/api/matches/{id}.json` (400 si
   l'identifiant est invalide, 404 s'il est inconnu) et `/api/players.json`.
 - **Design system :** Tailwind CSS 4 ; les tokens (palette Hextech, polices Beaufort et
@@ -47,7 +49,7 @@ un MVP de match est une récompense, pas un jugement.
   `focus-ring`) sont définis dans `src/styles/global.css`. Les primitives réutilisables
   sont dans `src/components/ui/` (`Panel`, `RingGauge`, `FormStrip`, `Metric`,
   `SectionHeading`, `Disclosure`, `ChampionIcon`, `RoleIcon`, `Avatar`, `MeterBar`,
-  `Sparkline`, `StatRow`, `MatchTrail`, `WinRateComparison`, `RoleSelect`), les composants métier dans
+  `Sparkline`, `StatRow`, `WinRateComparison`, `RoleSelect`, `UiIcon`, `SummonerSpell`), les composants métier dans
   `src/components/matches/`, `src/components/players/` et `src/components/collective/`,
   et les assemblages de page dans `src/components/sections/`.
 - **Serveur :** Astro 7 en rendu serveur avec adaptateur Node autonome ; Node.js
@@ -60,23 +62,44 @@ un MVP de match est une récompense, pas un jugement.
 - **Base locale observée :** 5 joueurs, 190 matchs : 58 à cinq, 10 à quatre, 3 à trois,
   80 à deux et 39 à un joueur. Le dernier run enregistré a réussi sans nouveau match.
   Ces volumes sont un instantané local, pas des constantes produit.
-- **Schéma :** tables `players`, `matches`, `participants` et `ingest_runs`, définies dans
-  `src/lib/db/schema.sql`. La base est `./etoiles.db` par défaut, surchargeable par
+- **Schéma :** tables `players`, `matches`, `participants`, `ingest_runs`,
+  `ingest_pending` et `ingest_cursors`, définies dans
+  `src/lib/db/schema.ts` (source unique incluse dans le bundle). La base est `./etoiles.db` par défaut, surchargeable par
   `DATABASE_PATH`, et ignorée par Git.
 - **Tests :** Vitest teste `getOverview()`, `getMatches()`, `getMatchDetail()`,
   `getPlayers()` et `getCollective()` sur SQLite en mémoire, avec des fixtures partagées
   (`src/lib/stats/fixtures.ts`) : absence de matchs, exclusion des lineups partiels, séries,
   forme, détail d'un match, identifiants invalides, enregistrements incomplets, seuil exact
-  de 5 matchs, identité joueur/champion/rôle et séries maximales.
-- **Validation du lot 3 :** 25 tests passent ; check sans erreur (un hint préexistant
-  d'import inutilisé dans `PlayerCard`), build réussi. Rendu desktop/mobile et ouverture
+  de 5 matchs, identité joueur/champion/rôle et absence de statistiques à 4 matchs.
+- **Validation après housekeeping :** 71 tests passent ; check sans erreur, warning
+  ou hint, build réussi. Rendu desktop/mobile et ouverture
   du dialog au clic et au clavier vérifiés ; états vide et composition qualifiée vérifiés
   sur un serveur de production avec SQLite isolée.
 - **Pas encore livré :** cron, hébergement Railway configuré ou healthcheck.
 
-**Limite connue de l'ingestion :** un run demande au plus 100 IDs de match par joueur.
-`--backfill` omet `startTime`, mais ne pagine pas au-delà de cette première page ; plusieurs
-exécutions peuvent compléter les données, sans garantie de backfill exhaustif.
+**Ingestion fiabilisée :** pagination par tranches de 100 IDs, écritures transactionnelles,
+file persistante des IDs à traiter et curseurs individuels avec chevauchement de 24 heures.
+Les anciens matchs incomplets sont remis en file et réparés atomiquement ; un échec
+conserve leurs données et leur ID à reprendre.
+Les runs en erreur sont marqués `failed`, les IDs échoués sont repris et la CLI retourne
+un code non nul. Timeout et retries HTTP bornés ; synchronisation d'assets vérifiée
+avant écriture atomique. Les validateurs des statistiques rejettent les données incohérentes.
+
+**Housekeeping UI :** nom du site dans `src/lib/site.ts`, menu sticky, forme récente
+cliquable, sorts d'invocateur et colonnes du détail libellées. Les historiques repliés
+ne gonflent plus le HTML initial ; les liens GET permettent l'accès sans JavaScript.
+Les erreurs de chargement du dialog sont relançables, les requêtes obsolètes annulées
+et les détails déjà consultés réutilisés pendant la session.
+`cdragon-dd` a été retiré car inutilisé ; Preact et la bibliothèque d'assets Riot sont conservés.
+
+**Mesure comparable locale :** HTML initial en développement passé de 1 074 146 à
+384 950 octets (environ 64 % de moins). Les temps en production sont mesurés séparément
+pour ne pas attribuer la compilation à froid du serveur de développement au coût du détail.
+Sur 20 requêtes chaudes en production locale : page initiale 161 322 octets,
+médiane 52 ms / p95 61 ms ; fragment de détail environ 29 Ko,
+médiane 4,2 ms / p95 5 ms. Ce sont des temps serveur locaux, pas une garantie de latence
+en hébergement. Le navigateur valide cache, retry, scroll, navigation sticky, historique
+différé, absence de statistiques à 4/5, responsive et accès sans JavaScript.
 
 ### Stack actuelle et choix futurs
 
@@ -182,8 +205,8 @@ partiels n'affectent aucun indicateur d'équipe.
 **État : terminé le 8 novembre 2026.**
 
 - `getCollective(db)` réutilise les matchs complets et leur validation dans `getMatches`.
-  Chaque résultat des séries ouvre le dialog existant. Les trois séries maximales de victoires les
-  plus longues sont affichées, départagées par récence, y compris une série en cours.
+  Les frises et séries collectives supprimées de l'interface ne sont plus calculées.
+  La forme récente cliquable et les séries de l'aperçu restent conservées.
 - Les associations portent sur deux joueurs et leurs champions : les duos de joueurs seuls
   auraient tous le même bilan puisque les cinq joueurs sont toujours présents. Les
   compositions exactes tiennent aussi compte des rôles. Les alias Data Dragon sont normalisés.
@@ -193,21 +216,24 @@ partiels n'affectent aucun indicateur d'équipe.
   précise que ces petits échantillons qui se recoupent ne prouvent aucune synergie ni causalité.
 - Sur la base actuelle : 9 associations qualifiées, aucune composition exacte à 5 matchs.
   L'état insuffisant est explicite ; aucun résultat fictif n'est substitué.
-- Le rendu serveur suffit : aucun nouvel endpoint ou îlot client. Primitives `MatchTrail`
-  et `WinRateComparison`, composants métier `DraftRow` et `DraftObservations`, section
+- Le rendu serveur suffit pour les observations : aucun îlot client. Primitive
+  `WinRateComparison`, composants métier `DraftRow` et `DraftObservations`, section
   `TeamCollective` et ancre « Collectif ».
 - Ajustement UX : suppression du titre introductif « Le fil de l'équipe / Ce qu'on
   construit ensemble » et de la frise « Au fil des mois », y compris son agrégation
-  mensuelle inutilisée ; les séries sont conservées dans un encart compact.
+  mensuelle inutilisée ; l'encart des séries collectives a également été retiré.
   Filtre GET des synergies
   (`role`, `role2`) : un rôle présent dans le duo, ou deux rôles pour le duo précis.
   L'agrégation et le seuil s'appliquent aux rôles réellement joués dans chaque match ;
   les autres données collectives ne sont pas filtrées. Rôles invalides : réponse 400.
 - Sélecteurs natifs stylisés via la primitive Tailwind `RoleSelect`, avec icône de rôle
   Riot actualisée par CSS, focus visible et navigation clavier native ; aucun script ajouté.
+- Housekeeping : les essais à 4 matchs sont affichés sans winrate ni bilan V/D, dans une
+  zone repliée distincte ; en dessous de 4 matchs ils restent masqués. Le seuil est testé
+  avant et après filtrage des rôles.
 
 **Validé :** exclusion des matchs partiels, seuils 4/5, regroupement et tri, cas vides,
-séries en cours testées ; intégration dialog, clavier
+absence de statistiques sous le seuil testée ; intégration dialog, clavier
 et rendu mobile vérifiés.
 
 ### LOT 4 — Exploitation et déploiement

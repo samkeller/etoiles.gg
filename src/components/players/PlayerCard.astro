@@ -8,7 +8,7 @@ import Sparkline from '../ui/Sparkline.astro';
 import StatRow from '../ui/StatRow.astro';
 import { formatDecimal, formatKda, formatPercent, formatShortDate } from '../../lib/format';
 import { championName, profileIcon, roleLabel } from '../../lib/lol';
-import { PROGRESSION_WINDOW, RECENT_WINDOW, type PlayerProfile } from '../../lib/stats';
+import { RECENT_WINDOW, type PlayerProfile } from '../../lib/stats';
 
 interface Props {
 	player: PlayerProfile;
@@ -85,7 +85,7 @@ const percent = (value: number | null) => (value === null ? '—' : formatPercen
 								</span>
 							)}
 						</figcaption>
-						<Sparkline values={player.progression} baseline={player.killParticipation} class="mt-2 h-12 w-full" />
+						<Sparkline id={player.puuid} values={player.progression} baseline={player.killParticipation} class="mt-2 h-12 w-full" />
 					</figure>
 				)}
 

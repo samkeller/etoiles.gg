@@ -4,7 +4,7 @@ import type { MatchInfoDto, ObjectiveName, ParticipantDto, Position, TeamId } fr
 import {
 	FULL_LINEUP_SIZE,
 	MIN_PARTIAL_LINEUP_SIZE,
-	parseMatchInfo,
+	validatedLineup,
 	toOutcome,
 	type MatchOutcome,
 } from './shared';
@@ -74,15 +74,32 @@ export function getMatches(database: Database.Database, scope: MatchScope = 'ful
 			FROM participants AS p
 			INNER JOIN matches AS m ON m.match_id = p.match_id
 			LEFT JOIN players AS pl ON pl.puuid = p.puuid
-			WHERE p.lineup_size BETWEEN ? AND ?
+			WHERE EXISTS (SELECT 1 FROM participants AS candidate WHERE candidate.match_id = m.match_id
+				AND candidate.lineup_size BETWEEN ? AND ?)
+				OR (SELECT COUNT(*) FROM participants AS candidate WHERE candidate.match_id = m.match_id) BETWEEN ? AND ?
 			ORDER BY m.game_start_ts DESC, m.match_id
 		`)
-		.all(minLineup, maxLineup) as MemberRow[];
+		.all(minLineup, maxLineup, minLineup, maxLineup) as MemberRow[];
 
 	const grouped = new Map<string, MemberRow[]>();
 	for (const row of rows) grouped.set(row.id, [...(grouped.get(row.id) ?? []), row]);
+	const rawMatches = database.prepare(`SELECT m.match_id AS id, m.raw_json AS rawJson FROM matches AS m
+		WHERE EXISTS (SELECT 1 FROM participants AS p WHERE p.match_id = m.match_id AND p.lineup_size BETWEEN ? AND ?)
+			OR (SELECT COUNT(*) FROM participants AS p WHERE p.match_id = m.match_id) BETWEEN ? AND ?`)
+		.all(minLineup, maxLineup, minLineup, maxLineup) as { id: string; rawJson: string | null }[];
+	const rawById = new Map(rawMatches.map((match) => [match.id, match.rawJson]));
 
-	return [...grouped.values()].map(toSummary);
+	return [...grouped.values()].map((members) => {
+		const first = members[0];
+		const rawJson = rawById.get(first.id);
+		if (!rawJson || first.startedAt === null || first.durationS === null) {
+			throw new Error(`Missing raw data for match ${first.id}.`);
+		}
+		validatedLineup(database, first.id, rawJson, first.startedAt, first.durationS, members.map((member) => ({
+			...member, role: member.role ?? '',
+		})));
+		return toSummary(members);
+	});
 }
 
 function toSummary(rows: MemberRow[]): MatchSummary {
@@ -135,6 +152,7 @@ export interface MatchParticipant {
 	gold: number;
 	damage: number;
 	vision: number;
+	summonerSpells: [number | null, number | null];
 }
 
 export interface MatchTeamObjectives {
@@ -185,6 +203,11 @@ interface DetailMemberRow {
 	name: string | null;
 	win: number;
 	lineupSize: number;
+	champion: string;
+	role: string;
+	kills: number;
+	deaths: number;
+	assists: number;
 }
 
 export function getMatchDetail(database: Database.Database, matchId: string): MatchDetail | null {
@@ -197,7 +220,7 @@ export function getMatchDetail(database: Database.Database, matchId: string): Ma
 
 	const members = database
 		.prepare(`
-			SELECT p.puuid, pl.game_name AS name, p.win, p.lineup_size AS lineupSize
+			SELECT p.puuid, pl.game_name AS name, p.win, p.lineup_size AS lineupSize, p.champion, p.role, p.kills, p.deaths, p.assists
 			FROM participants AS p
 			LEFT JOIN players AS pl ON pl.puuid = p.puuid
 			WHERE p.match_id = ?
@@ -205,10 +228,8 @@ export function getMatchDetail(database: Database.Database, matchId: string): Ma
 		.all(matchId) as DetailMemberRow[];
 	if (members.length === 0) return null;
 
-	const info = parseMatchInfo(match.rawJson);
+	const { info, teamId: ourTeamId } = validatedLineup(database, matchId, match.rawJson, match.startedAt, match.durationS, members);
 	const memberNames = new Map(members.map((member) => [member.puuid, member.name]));
-	const ourTeamId = info.participants.find((participant) => memberNames.has(participant.puuid))?.teamId;
-	if (ourTeamId === undefined) throw new Error(`Inconsistent data found in match ${matchId}.`);
 
 	const teamIds = [ourTeamId, ourTeamId === 100 ? 200 : 100] as const;
 	const [ours, theirs] = teamIds.map((teamId) => toTeam(info, teamId, ourTeamId, memberNames));
@@ -272,18 +293,16 @@ function toParticipant(participant: ParticipantDto, memberNames: ReadonlyMap<str
 		gold: participant.goldEarned,
 		damage: participant.totalDamageDealtToChampions,
 		vision: participant.visionScore,
+		summonerSpells: [spellId(participant.summoner1Id), spellId(participant.summoner2Id)],
 	};
 }
 
-/**
- * TODO: Remplacer par opgg
- * ex: https://op.gg/lol/summoners/euw/Liberticide-EDL/matches/ta1XN8oiMOIxtKIU8dFJ0SsRrc2O5TfnMD2YRjvyx3Y%3D/1794063465000
- * @param matchId
- * @returns 
- */
+function spellId(value: number | undefined): number | null {
+	return value ?? null;
+}
+
 function externalMatchUrl(matchId: string): string {
 	const [platform, gameId] = matchId.split('_');
 	const region = platform.replace(/\d+$/, '').toLowerCase();
 	return `https://www.leagueofgraphs.com/match/${region}/${gameId}`;
-	
 }

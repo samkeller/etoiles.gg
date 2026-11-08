@@ -4,15 +4,16 @@ import RoleIcon from '../ui/RoleIcon.astro';
 import WinRateComparison from '../ui/WinRateComparison.astro';
 import { championName } from '../../lib/lol';
 import { pluralize } from '../../lib/format';
-import type { DraftObservation } from '../../lib/stats';
+import type { DraftObservation, PendingDraftObservation } from '../../lib/stats';
 
 interface Props {
-	observation: DraftObservation;
+	observation: DraftObservation | PendingDraftObservation;
 	baseline: number;
 	composition?: boolean;
+	minimumGames?: number;
 }
 
-const { observation, baseline, composition = false } = Astro.props;
+const { observation, baseline, composition = false, minimumGames = 5 } = Astro.props;
 ---
 
 <article class="px-5 py-5 sm:px-7">
@@ -31,7 +32,11 @@ const { observation, baseline, composition = false } = Astro.props;
 				</li>
 			))}
 		</ul>
-		<WinRateComparison winRate={observation.winRate} baseline={baseline} games={observation.games} wins={observation.wins} />
+		{'winRate' in observation ? (
+			<WinRateComparison winRate={observation.winRate} baseline={baseline} games={observation.games} wins={observation.wins} />
+		) : (
+			<p class="text-sm text-hextech-300">{observation.games}/{minimumGames} matchs · encore {minimumGames - observation.games} match pour un bilan</p>
+		)}
 	</div>
 	<div class="mt-4 flex items-center justify-between gap-3 text-xs text-muted">
 		<span>{pluralize(observation.games, 'match ensemble', 'matchs ensemble')}</span>
