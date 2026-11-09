@@ -56,11 +56,4 @@ const Action = permalinkOnly ? 'a' : 'button';
 		<OpggIcon name="ui-arrow-right" class="size-3 text-gold-500 transition-transform group-hover:translate-x-0.5 group-hover:text-gold-200 max-sm:hidden" />
 		<span class="sr-only">{permalinkOnly ? 'Ouvrir la page du match' : 'Ouvrir le détail rapide du match'}</span>
 	</Action>
-	{!permalinkOnly && <a
-		href={`/matches/${match.id}`}
-		class="focus-ring grid w-10 shrink-0 place-items-center border-l border-white/10 text-muted transition-colors hover:bg-white/5 hover:text-ink"
-		aria-label={`Ouvrir la page complète du match ${match.id}`}
-	>
-		<OpggIcon name="ui-arrow-right" class="size-3 -rotate-45" />
-	</a>}
 </div>

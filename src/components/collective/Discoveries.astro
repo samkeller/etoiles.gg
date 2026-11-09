@@ -19,16 +19,6 @@ const byId = new Map(matches.map((match) => [match.id, match]));
 						<h3 class="font-display text-lg text-ink">{discovery.title}</h3>
 					</div>
 					<p class="mt-3 text-sm leading-relaxed text-ink">{discovery.text}</p>
-					<details class="mt-4 text-xs text-muted">
-						<summary class="focus-ring w-fit cursor-pointer text-hextech-300">{discovery.matchIds.length} parties sources · méthode</summary>
-						<p class="mt-3 leading-relaxed">{discovery.context}</p>
-						<ol class="mt-3 max-h-48 space-y-1 overflow-y-auto">
-							{discovery.matchIds.map((id) => {
-								const match = byId.get(id);
-								return <li><a class="focus-ring block py-1 hover:text-ink" href={`/matches/${id}`}>{match ? `${formatShortDate(match.startedAt)} · ${match.outcome === 'win' ? 'Victoire' : 'Défaite'}` : id}</a></li>;
-							})}
-						</ol>
-					</details>
 				</article>
 			))}
 		</div>
