@@ -14,6 +14,28 @@ export class HttpError extends Error {
 	constructor(public readonly status: number, message: string) { super(message); }
 }
 
+async function errorMessage(response: Response, url: string): Promise<string> {
+	let detail = '';
+	if (response.headers.get('content-type')?.toLowerCase().includes('json')) {
+		try {
+			const body: unknown = await response.json();
+			if (body && typeof body === 'object' && !Array.isArray(body)) {
+				const status = (body as Record<string, unknown>).status;
+				if (status && typeof status === 'object' && !Array.isArray(status)) {
+					const message = (status as Record<string, unknown>).message;
+					if (typeof message === 'string') {
+						const sanitized = message.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 240);
+						if (sanitized) detail = `: ${sanitized}`;
+					}
+				}
+			}
+		} catch {
+			// Ignore malformed error bodies and preserve the HTTP status and endpoint.
+		}
+	}
+	return `HTTP ${response.status} for ${new URL(url).pathname}${detail}`;
+}
+
 export function deferredRetryDelay(error: unknown, attempts: number): number {
 	const base = error instanceof RateLimitError ? 15 * 60_000 : 60_000;
 	const backoff = Math.min(base * 2 ** Math.min(attempts, 8), 6 * 60 * 60_000);
@@ -42,16 +64,17 @@ export async function request(url: string, options: RequestOptions = {}): Promis
 		const delay = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(retryAfter ?? '') - Date.now();
 		const retryAfterMs = Number.isFinite(delay) ? Math.max(0, delay) : undefined;
 		if (attempt >= maxRetries || (response.status !== 429 && response.status < 500)) {
-			const message = `HTTP ${response.status} for ${new URL(url).pathname}`;
+			const message = await errorMessage(response, url);
 			if (response.status === 429) throw new RateLimitError(message, retryAfterMs);
 			throw new HttpError(response.status, message);
 		}
-		await response.body?.cancel();
 		if (Number.isFinite(delay) && delay > maxRetryAfterMs) {
-			const message = `HTTP ${response.status}: Retry-After ${Math.ceil(delay / 1000)}s exceeds the ${maxRetryAfterMs / 1000}s wait limit`;
+			const detail = await errorMessage(response, url);
+			const message = `${detail}: Retry-After ${Math.ceil(delay / 1000)}s exceeds the ${maxRetryAfterMs / 1000}s wait limit`;
 			if (response.status === 429) throw new RateLimitError(message, retryAfterMs);
 			throw new Error(message);
 		}
+		await response.body?.cancel();
 		const delayMs = Math.max(0, Math.min(Number.isFinite(delay) ? delay : 1000 * 2 ** attempt, maxRetryAfterMs));
 		options.onRetry?.({ attempt: attempt + 1, maxRetries, delayMs, reason: `HTTP ${response.status}` });
 		await sleep(delayMs);

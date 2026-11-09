@@ -226,6 +226,9 @@ après la pause indiquée par `npm run sync -- status` reprend la collecte. La c
 validés avant les appels. Les assets sont vérifiés avant écriture (réponse HTTP et
 signature PNG), remplacés atomiquement, et une
 synchronisation partielle ne se présente pas comme une réussite.
+Les erreurs Riot affichent le statut et le chemin de l'appel; si la réponse inclut un
+JSON structuré, son message est ajouté comme indice. Ce détail peut être absent ou changer
+côté Riot : le statut HTTP reste la référence du traitement.
 
 Les statistiques partagent les mêmes validations des données brutes et des participants
 persistés : un lineup incomplet ou incohérent ne produit pas de chiffres plausibles.

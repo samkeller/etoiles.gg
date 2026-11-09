@@ -117,6 +117,21 @@ describe('bounded HTTP requests', () => {
 		expect(fetch).toHaveBeenCalledTimes(1);
 	});
 
+	it('includes Riot error messages without exposing query parameters', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({
+			status: { message: 'Bad request - invalid parameter\nMore info', status_code: 400 },
+		}, { status: 400 })));
+		await expect(request('https://example.test/private/path?api_key=secret'))
+			.rejects.toThrow('HTTP 400 for /private/path: Bad request - invalid parameter More info');
+	});
+
+	it('keeps the HTTP failure readable when the error body is invalid JSON', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{invalid', {
+			status: 400, headers: { 'content-type': 'application/json' },
+		})));
+		await expect(request('https://example.test/private/path')).rejects.toThrow('HTTP 400 for /private/path');
+	});
+
 	it('aborts timed out requests and bounds network retries', async () => {
 		const fetch = vi.fn((_url: string, options: RequestInit) => new Promise((_resolve, reject) => {
 			options.signal!.addEventListener('abort', () => reject(new Error('timeout')), { once: true });
