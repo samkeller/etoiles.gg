@@ -90,6 +90,37 @@ describe('setup', () => {
 });
 
 describe('history and summaries', () => {
+	it('reports pagination, persisted imports, ranks, timelines and batch boundaries as work happens', async () => {
+		const database = createTestDatabase();
+		for (const member of fullLineup()) addPlayer(database, member.puuid, member.puuid);
+		const progress = vi.fn();
+		const client = {
+			getFlexMatchIds: vi.fn(async () => {
+				expect(progress).toHaveBeenLastCalledWith(expect.stringContaining('start=0 · count=100'));
+				return ['EUW1_123'];
+			}),
+			getRankedMatchIds: vi.fn().mockResolvedValue([]),
+			getMatch: vi.fn(async (id: string) => {
+				expect(progress).toHaveBeenLastCalledWith(`Détails 1/1 : ${id}`);
+				return match(id);
+			}),
+			getRankEntries: vi.fn().mockResolvedValue([]),
+			getTimeline: vi.fn(async (id: string) => {
+				expect(progress).toHaveBeenLastCalledWith(`Timeline 1/1 : ${id} · tentative=1`);
+				return null;
+			}),
+		};
+		const result = await runHistory(database, client, undefined, () => {}, progress);
+		expect(result).toMatchObject({ batches: 1, failures: 0, stopReason: 'complete' });
+		const messages = progress.mock.calls.map(([message]) => message).join('\n');
+		expect(messages).toContain('Lot historique 1 : début');
+		expect(messages).toContain('prochain offset=1 · terminée=true');
+		expect(messages).toContain('EUW1_123 : importé · queue=440 · joueurs=5');
+		expect(messages).toContain('Rangs player-0 : enregistrés · 0 entrées Riot');
+		expect(messages).toContain('Timeline EUW1_123 : absente chez Riot');
+		expect(messages).toContain('Lot enregistré : ok');
+	});
+
 	it('counts new imports per queue, existing rows, and repairs without changing team match semantics', async () => {
 		const database = createTestDatabase();
 		addPlayer(database, 'player-0', 'Player');

@@ -4,6 +4,7 @@ export interface RequestOptions {
 	maxRetries?: number;
 	maxRetryAfterMs?: number;
 	sleep?: (ms: number) => Promise<void>;
+	onRetry?: (retry: { attempt: number; maxRetries: number; delayMs: number; reason: string }) => void;
 }
 
 export class RateLimitError extends Error {
@@ -29,7 +30,10 @@ export async function request(url: string, options: RequestOptions = {}): Promis
 			response = await fetch(url, { headers: options.headers, signal: AbortSignal.timeout(timeoutMs) });
 		} catch (error) {
 			if (attempt >= maxRetries) throw error;
-			await sleep(Math.min(1000 * 2 ** attempt, 30_000));
+			const delayMs = Math.min(1000 * 2 ** attempt, 30_000);
+			options.onRetry?.({ attempt: attempt + 1, maxRetries, delayMs,
+				reason: error instanceof Error ? error.name : 'NetworkError' });
+			await sleep(delayMs);
 			continue;
 		}
 		if (response.ok) return response;
@@ -48,6 +52,8 @@ export async function request(url: string, options: RequestOptions = {}): Promis
 			if (response.status === 429) throw new RateLimitError(message, retryAfterMs);
 			throw new Error(message);
 		}
-		await sleep(Math.max(0, Math.min(Number.isFinite(delay) ? delay : 1000 * 2 ** attempt, maxRetryAfterMs)));
+		const delayMs = Math.max(0, Math.min(Number.isFinite(delay) ? delay : 1000 * 2 ** attempt, maxRetryAfterMs));
+		options.onRetry?.({ attempt: attempt + 1, maxRetries, delayMs, reason: `HTTP ${response.status}` });
+		await sleep(delayMs);
 	}
 }

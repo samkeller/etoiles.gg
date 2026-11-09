@@ -88,7 +88,8 @@ export function buildTeamStories(facts: readonly TeamFact[]): TeamStories {
 				title: `${kind === 'penta' ? 'Pentakill' : 'Quadrakill'} · ${member.name}`,
 				value: `${kind === 'penta' ? player.pentaKills : player.quadraKills} × ${championName(player.championName)}`,
 				startedAt: fact.match.startedAt, matchIds: [fact.match.id],
-				puuid: player.puuid, champion: championId(player.championName),
+				puuid: player.puuid, 
+				champion: championId(player.championName),
 			});
 		}
 		if (fact.match.outcome === 'win' && fact.timeline.status === 'ready') {

@@ -37,8 +37,12 @@ function deferMatch(database: Database.Database, id: string, error: unknown): vo
 		.run(Date.now() + delay, id);
 }
 
-export async function ingest(database: Database.Database, client: RiotClient, backfill = false, options: { deadlineAt?: number } = {}) {
+export async function ingest(database: Database.Database, client: RiotClient, backfill = false, options: {
+	deadlineAt?: number;
+	onProgress?: (message: string) => void;
+} = {}) {
 	const startedAt = Date.now();
+	const progress = options.onProgress ?? (() => {});
 	const capturedOn = new Date(startedAt).toISOString().slice(0, 10);
 	let newMatches = 0;
 	let pendingRemaining = 0;
@@ -56,12 +60,13 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 		return true;
 	};
 	const failures: string[] = [];
-	const players = database.prepare('SELECT puuid FROM players').all() as { puuid: string }[];
+	const players = database.prepare('SELECT puuid, game_name AS name FROM players').all() as { puuid: string; name: string | null }[];
 	const roster = new Set(players.map((player) => player.puuid));
 	const supportsSoloDuo = Boolean(client.getRankedMatchIds);
 
 	try {
 		if (!roster.size) throw new Error('No players in DB; run npm run sync -- setup first');
+		progress(`Collecte : ${players.length} joueurs · files ${supportsSoloDuo ? '440 (Flex), 420 (Solo/Duo)' : '440 (Flex)'} · mode ${backfill ? 'historique' : 'incrémental'}`);
 		const enqueue = database.prepare('INSERT OR IGNORE INTO ingest_pending (match_id) VALUES (?)');
 		database.prepare(`INSERT OR IGNORE INTO ingest_pending (match_id)
 			SELECT m.match_id FROM matches AS m
@@ -70,22 +75,27 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 					AND (p.lineup_size IS NULL OR p.lineup_size !=
 						(SELECT COUNT(*) FROM participants AS candidate WHERE candidate.match_id = m.match_id)))`).run();
 
-		collection: for (const { puuid } of players) {
+		collection: for (const { puuid, name } of players) {
 			for (const queue of RANKED_QUEUES) {
 				if (!withinBudget()) break collection;
 				if (queue === 420 && !supportsSoloDuo) continue;
 				try {
+					const context = `Collecte ${name ?? puuid} · queue=${queue}`;
 					const listIds = queue === 420 ? client.getRankedMatchIds! : client.getFlexMatchIds;
 					if (backfill) {
 						const cursor = database.prepare(`SELECT next_start AS nextStart, is_complete AS isComplete
 							FROM ingest_backfill_cursors WHERE puuid = ? AND queue_id = ?`)
 							.get(puuid, queue) as BackfillCursor | undefined;
-						if (cursor?.isComplete) continue;
+						if (cursor?.isComplete) {
+							progress(`${context} : déjà terminée`);
+							continue;
+						}
 						let nextStart = cursor?.nextStart ?? 0;
 						const seen = new Set<string>();
 
 						for (let page = 0; page < BACKFILL_PAGES_PER_QUEUE; page += 1) {
 							if (!withinBudget()) break collection;
+							progress(`${context} : start=${nextStart} · count=${MATCH_PAGE_SIZE}`);
 							const ids = await listIds(puuid, { start: nextStart, count: MATCH_PAGE_SIZE, queue });
 							if (ids.length && ids.every((id) => seen.has(id))) {
 								throw new Error('Riot pagination made no progress');
@@ -106,6 +116,7 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 										updated_at = excluded.updated_at`)
 									.run(puuid, queue, nextStart, Number(isComplete), Date.now());
 							})();
+							progress(`${context} : ${ids.length} IDs reçus · prochain offset=${nextStart} · terminée=${isComplete}`);
 							if (isComplete || nextStart <= pageStart) break;
 						}
 					} else {
@@ -123,6 +134,7 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 						const seen = new Set<string>();
 						for (let start = 0; ; start += MATCH_PAGE_SIZE) {
 							if (!withinBudget()) break collection;
+							progress(`${context} : start=${start} · count=${MATCH_PAGE_SIZE} · startTime=${startTime}`);
 							const ids = await listIds(puuid, { start, count: MATCH_PAGE_SIZE, startTime, queue });
 							if (ids.length && ids.every((id) => seen.has(id))) {
 								throw new Error('Riot pagination made no progress');
@@ -133,6 +145,7 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 									seen.add(id);
 								}
 							})();
+							progress(`${context} : ${ids.length} IDs reçus et mis en file (doublons ignorés)`);
 							if (ids.length < MATCH_PAGE_SIZE) break;
 						}
 
@@ -150,6 +163,7 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 					const queueName = queue === 420 ? 'Solo/Duo collection' : 'Flex collection';
 					const message = `${queueName} ${puuid}: ${messageOf(error)}`;
 					failures.push(message);
+					progress(`Échec : ${message}`);
 					if (error instanceof RateLimitError) throw new Error(message);
 				}
 			}
@@ -159,8 +173,11 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 			WHERE next_attempt_at <= ? ORDER BY next_attempt_at, rowid LIMIT ?`)
 			.all(startedAt, MATCH_DETAILS_PER_RUN) as { match_id: string }[];
 		const remove = database.prepare('DELETE FROM ingest_pending WHERE match_id = ?');
+		progress(`Détails : ${pending.length} matchs prêts sélectionnés · limite=${MATCH_DETAILS_PER_RUN}`);
+		let processed = 0;
 		for (const { match_id: id } of pending) {
 			if (!withinBudget()) break;
+			progress(`Détails ${++processed}/${pending.length} : ${id}`);
 			try {
 				const existing = database.prepare(`SELECT raw_json AS rawJson, game_start_ts AS startedAt, duration_s AS durationS
 					FROM matches WHERE match_id = ?`).get(id) as { rawJson: string | null; startedAt: number | null; durationS: number | null } | undefined;
@@ -170,6 +187,7 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 						validatedLineup(database, id, existing.rawJson, existing.startedAt, existing.durationS);
 						remove.run(id);
 						existingMatches += 1;
+						progress(`${id} : déjà présent et valide`);
 						continue;
 					} catch {
 						// Legacy non-atomic ingestion may have left an incomplete row. Refetch before replacing it.
@@ -182,6 +200,7 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 				if ((info.queueId !== 440 && info.queueId !== 420) || !ours.length) {
 					if (existing) throw new Error('Cannot repair existing match without a flex roster lineup');
 					remove.run(id);
+					progress(`${id} : hors périmètre, retiré de la file`);
 					continue;
 				}
 				if (ours.some((participant) => participant.teamId !== ours[0].teamId)) throw new Error('Roster spans opposing teams');
@@ -206,22 +225,29 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 				if (existing) repairedMatches += 1;
 				else if (info.queueId === 440 || info.queueId === 420) importedByQueue[info.queueId] += 1;
 				if (!existing && info.queueId === 440 && ours.length === 5) newMatches += 1;
+				progress(`${id} : ${existing ? 'réparé' : 'importé'} · queue=${info.queueId} · joueurs=${ours.length}`);
 			} catch (error) {
 				const message = `Match ${id}: ${messageOf(error)}`;
 				deferMatch(database, id, error);
 				failures.push(message);
+				progress(`Échec différé : ${message}`);
 				if (error instanceof RateLimitError) throw new Error(message);
 			}
 		}
 
 		if (client.getRankEntries) {
+			progress(`Rangs : ${players.length} joueurs · date=${capturedOn}`);
 			for (const { puuid } of players) {
 				if (!withinBudget()) break;
 				const alreadyCaptured = database.prepare('SELECT 1 FROM rank_snapshots WHERE puuid = ? AND captured_on = ? LIMIT 1')
 					.get(puuid, capturedOn);
-				if (alreadyCaptured) continue;
+				if (alreadyCaptured) {
+					progress(`Rangs ${puuid} : déjà enregistrés aujourd’hui`);
+					continue;
+				}
 				try {
 					if (!withinBudget()) break;
+					progress(`Rangs ${puuid} : récupération`);
 					const entries = await client.getRankEntries(puuid);
 					const byQueue = new Map(entries.map((entry) => [entry.queueType, entry]));
 					database.transaction(() => {
@@ -234,15 +260,17 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 								entry?.leaguePoints ?? null, entry?.wins ?? null, entry?.losses ?? null);
 						}
 					})();
+					progress(`Rangs ${puuid} : enregistrés · ${entries.length} entrées Riot`);
 				} catch (error) {
 					const message = `Rank snapshot ${puuid}: ${messageOf(error)}`;
 					failures.push(message);
+					progress(`Échec : ${message}`);
 					if (error instanceof RateLimitError) break;
 				}
 			}
 		}
 		if (client.getTimeline && !failures.length) {
-			const timelines = await collectTimelines(database, client.getTimeline, withinBudget);
+			const timelines = await collectTimelines(database, client.getTimeline, withinBudget, progress);
 			timelinesCollected = timelines.collected;
 			timelinesUnavailable = timelines.unavailable;
 			failures.push(...timelines.failures);
@@ -255,6 +283,7 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 
 	database.prepare('INSERT INTO ingest_runs (started_at, finished_at, new_matches, status) VALUES (?, ?, ?, ?)')
 		.run(startedAt, Date.now(), newMatches, failures.length ? 'failed' : 'ok');
+	progress(`Lot enregistré : ${failures.length ? 'échec' : 'ok'} · budget épuisé=${budgetExhausted} · ${pendingRemaining} matchs en attente · durée=${((Date.now() - startedAt) / 1000).toFixed(1)} s`);
 	return { newMatches, failures, pendingRemaining, importedByQueue, existingMatches, repairedMatches, budgetExhausted,
 		timelinesCollected, timelinesUnavailable };
 }

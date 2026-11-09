@@ -6,6 +6,49 @@ import { addMatch, closeTestDatabases, createTestDatabase, fullLineup } from './
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); closeTestDatabases(); });
 
 describe('bounded HTTP requests', () => {
+	it('reports HTTP retries before sleeping with no request credentials or URL', async () => {
+		vi.stubGlobal('fetch', vi.fn()
+			.mockResolvedValueOnce(new Response('', { status: 429, headers: { 'retry-after': '90' } }))
+			.mockResolvedValueOnce(new Response('ok')));
+		const onRetry = vi.fn();
+		const sleep = vi.fn(async () => {
+			expect(onRetry).toHaveBeenCalledWith({ reason: 'HTTP 429', attempt: 1, maxRetries: 3, delayMs: 90_000 });
+		});
+		await request('https://example.test/private', { sleep, onRetry, maxRetryAfterMs: 300_000 });
+		expect(onRetry).toHaveBeenCalledOnce();
+	});
+
+	it('reports bounded network retries and no retry on the final failure', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new DOMException('private URL', 'TimeoutError')));
+		const onRetry = vi.fn();
+		await expect(request('https://example.test', { onRetry, maxRetries: 1, sleep: async () => {} }))
+			.rejects.toThrow('private URL');
+		expect(onRetry.mock.calls).toEqual([[{ reason: 'TimeoutError', attempt: 1, maxRetries: 1, delayMs: 1000 }]]);
+	});
+
+	it('forwards the retry observer through all Riot endpoints', async () => {
+		vi.stubEnv('RIOT_API_KEY', 'RGAPI-00000000-0000-0000-0000-000000000000');
+		vi.useFakeTimers();
+		const fetch = vi.fn();
+		vi.stubGlobal('fetch', fetch);
+		const onRetry = vi.fn();
+		const cases = [
+			() => getPuuid('Player#EUW', { onRetry }),
+			() => getFlexMatchIds('player', {}, { onRetry }),
+			() => getMatch('EUW1_1', { onRetry }),
+			() => getTimeline('EUW1_1', { onRetry }),
+			() => getRankEntries('player', { onRetry }),
+		];
+		for (const run of cases) {
+			fetch.mockResolvedValueOnce(new Response('', { status: 429, headers: { 'retry-after': '2' } }))
+				.mockResolvedValueOnce(new Response('', { status: 403 }));
+			const result = expect(run()).rejects.toThrow('HTTP 403');
+			await vi.advanceTimersByTimeAsync(2000);
+			await result;
+		}
+		expect(onRetry).toHaveBeenCalledTimes(cases.length);
+	});
+
 	it('preserves long Retry-After delays for durable retries even when the request retry budget is exhausted', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 429, headers: { 'retry-after': '86400' } })));
 		await expect(request('https://example.test', { maxRetries: 0 })).rejects.toMatchObject({ retryAfterMs: 86400000 });

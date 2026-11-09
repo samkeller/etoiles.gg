@@ -61,6 +61,7 @@ export async function setupPlayers(
 	database: Database.Database,
 	riotIds: string[],
 	client: { getPuuid(id: string): Promise<string> },
+	onProgress: (message: string) => void = () => {},
 ): Promise<number> {
 	const ids = resolveRiotIds(riotIds);
 	const insert = database.prepare(`INSERT INTO players (puuid, game_name, tag_line) VALUES (?, ?, ?)
@@ -68,6 +69,7 @@ export async function setupPlayers(
 	let resolved = 0;
 	for (const id of ids) {
 		try {
+			onProgress(`Joueur ${resolved + 1}/${ids.length} : résolution de ${id}`);
 			const puuid = await client.getPuuid(id);
 			if (typeof puuid !== 'string' || !puuid.trim() || /[\u0000-\u001f/\\]/.test(puuid)) {
 				throw new Error('Invalid Riot account PUUID');
@@ -75,6 +77,7 @@ export async function setupPlayers(
 			const [name, tag] = parseRiotId(id);
 			insert.run(puuid, name, tag);
 			resolved += 1;
+			onProgress(`Joueur ${resolved}/${ids.length} : ${id} enregistré`);
 		} catch (error) {
 			throw new Error(`Setup ${id} (${resolved}/${ids.length} enregistrés): ${error instanceof Error ? error.message : String(error)}`);
 		}
@@ -149,6 +152,7 @@ export async function runHistory(
 	client: Parameters<typeof ingest>[1],
 	maxDurationSeconds?: number,
 	onBatch: (result: IngestResult) => void = () => {},
+	onProgress: (message: string) => void = () => {},
 ) {
 	if (maxDurationSeconds !== undefined && (!Number.isFinite(maxDurationSeconds) || maxDurationSeconds <= 0 || maxDurationSeconds > 86400)) {
 		throw new Error('Invalid history duration (seconds, maximum 86400).');
@@ -160,7 +164,8 @@ export async function runHistory(
 	let stopReason: 'single-batch' | 'complete' | 'budget' | 'failed' | 'deferred' | 'no-progress' = 'single-batch';
 	for (;;) {
 		const before = readSyncStatus(database, queues);
-		const result = await ingest(database, client, true, { deadlineAt });
+		onProgress(`Lot historique ${batches + 1} : début${deadlineAt === undefined ? '' : ` · budget restant ${Math.max(0, (deadlineAt - Date.now()) / 1000).toFixed(1)} s`}`);
+		const result = await ingest(database, client, true, { deadlineAt, onProgress });
 		batches += 1;
 		failures += result.failures.length;
 		onBatch(result);

@@ -3,6 +3,9 @@ import type { LeagueEntryDto, MatchDto } from './types';
 import { request } from './backendHttp';
 import { validateMatch } from './matchValidation';
 import { HttpError } from './backendHttp';
+import type { RequestOptions } from './backendHttp';
+
+type RiotRequestOptions = Pick<RequestOptions, 'onRetry'>;
 
 export function riotHeaders(): Record<string, string> {
     const token = process.env.RIOT_API_KEY?.trim();
@@ -20,21 +23,22 @@ export function parseRiotId(riotId: string): [string, string] {
     return [parts[0].trim(), parts[1].trim()];
 }
 
-async function get(path: string): Promise<unknown> {
+async function get(path: string, options: RiotRequestOptions): Promise<unknown> {
     return (await request(`https://europe.api.riotgames.com${path}`, {
         headers: riotHeaders(),
         timeoutMs: 30_000,
         maxRetryAfterMs: 5 * 60_000,
+        ...options,
     })).json();
 }
 
 /** 
  * Récupère le PUUID d'un joueur à partir de son Riot ID ("pseudo#TAG")
 */
-export async function getPuuid(riotId: string): Promise<string> {
+export async function getPuuid(riotId: string, options: RiotRequestOptions = {}): Promise<string> {
     const [name, tag] = parseRiotId(riotId);
     const acc = await get(
-        `/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(name)}/${encodeURIComponent(tag)}`
+        `/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(name)}/${encodeURIComponent(tag)}`, options
     );
     if (!acc || typeof acc !== 'object' || !('puuid' in acc) || typeof acc.puuid !== 'string' || !acc.puuid) {
         throw new Error('Invalid Riot account response');
@@ -55,12 +59,12 @@ export interface FlexMatchIdsOptions {
  * @param count Le nombre de matchs à récupérer, défaut 20
  * @returns Une liste des IDs de matchs flex
  */
-export async function getFlexMatchIds(puuid: string, { start = 0, count = 20, startTime, queue = 440 }: FlexMatchIdsOptions): Promise<string[]> {
+export async function getFlexMatchIds(puuid: string, { start = 0, count = 20, startTime, queue = 440 }: FlexMatchIdsOptions, options: RiotRequestOptions = {}): Promise<string[]> {
     if (!puuid || !Number.isInteger(start) || start < 0 || !Number.isInteger(count) || count < 1 || count > 100 ||
         (startTime !== undefined && (!Number.isInteger(startTime) || startTime < 0))) throw new Error('Invalid match list parameters');
     const params = new URLSearchParams({ queue: String(queue), type: 'ranked', count: String(count), start: String(start) });
     if (startTime !== undefined) params.set('startTime', String(startTime));
-    const ids = await get(`/lol/match/v5/matches/by-puuid/${encodeURIComponent(puuid)}/ids?${params}`);
+    const ids = await get(`/lol/match/v5/matches/by-puuid/${encodeURIComponent(puuid)}/ids?${params}`, options);
     if (!Array.isArray(ids) || !ids.every((id) => typeof id === 'string' && /^[A-Z0-9]{2,8}_\d{1,20}$/.test(id))) {
         throw new Error('Invalid Riot match list response');
     }
@@ -74,15 +78,15 @@ export const getRankedMatchIds = getFlexMatchIds;
  * @param matchId L'ID du match à récupérer
  * @returns Les détails du match
  */
-export async function getMatch(matchId: string): Promise<MatchDto> {
+export async function getMatch(matchId: string, options: RiotRequestOptions = {}): Promise<MatchDto> {
     if (!/^[A-Z0-9]{2,8}_\d{1,20}$/.test(matchId)) throw new Error('Invalid match ID');
-    return validateMatch(await get(`/lol/match/v5/matches/${matchId}`), matchId);
+    return validateMatch(await get(`/lol/match/v5/matches/${matchId}`, options), matchId);
 }
 
-export async function getTimeline(matchId: string): Promise<unknown | null> {
+export async function getTimeline(matchId: string, options: RiotRequestOptions = {}): Promise<unknown | null> {
     if (!/^[A-Z0-9]{2,8}_\d{1,20}$/.test(matchId)) throw new Error('Invalid match ID');
     try {
-        return await get(`/lol/match/v5/matches/${matchId}/timeline`);
+        return await get(`/lol/match/v5/matches/${matchId}/timeline`, options);
     } catch (error) {
         if (error instanceof HttpError && error.status === 404) return null;
         throw error;
@@ -116,7 +120,7 @@ export function validateLeagueEntries(value: unknown): LeagueEntryDto[] {
     });
 }
 
-export async function getRankEntries(puuid: string): Promise<LeagueEntryDto[]> {
+export async function getRankEntries(puuid: string, options: RiotRequestOptions = {}): Promise<LeagueEntryDto[]> {
     if (!puuid || /[\u0000-\u001f/\\]/.test(puuid)) throw new Error('Invalid PUUID');
     const platform = (process.env.RIOT_PLATFORM ?? 'euw1').trim().toLowerCase();
     if (!/^(br1|eun1|euw1|jp1|kr|la1|la2|na1|oc1|ph2|ru|sg2|th2|tr1|tw2|vn2)$/.test(platform)) {
@@ -126,6 +130,7 @@ export async function getRankEntries(puuid: string): Promise<LeagueEntryDto[]> {
         headers: riotHeaders(),
         timeoutMs: 30_000,
         maxRetryAfterMs: 5 * 60_000,
+        ...options,
     });
     return validateLeagueEntries(await response.json());
 }

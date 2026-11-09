@@ -137,6 +137,16 @@ En cas d'échec réseau pendant le setup, les identités déjà résolues sont c
 le message précise le nombre enregistré. Le planificateur exige toujours cinq joueurs.
 `status` et l'aide ne nécessitent pas de clé Riot.
 
+Les commandes `setup`, `update` et `history` affichent un suivi horodaté limité à
+une ligne de progression toutes les cinq secondes, puis le bilan et la durée totale.
+Chaque lot historique est numéroté. Après 15 secondes sans nouvelle progression,
+un seul rappel indique l'opération en attente, sans répétition.
+Les reprises HTTP indiquent explicitement la cause (429, erreur serveur ou réseau),
+le numéro de reprise et le délai avant réessai, sans modifier la politique de retry.
+La clé API et les réponses brutes ne sont jamais journalisées.
+`LOG_LEVEL=silent` masque ces logs informatifs, mais conserve les erreurs;
+les sorties explicites de `status` et de l'aide restent affichées.
+
 ## Fiabilité de la synchronisation
 
 L'ingestion incrémentale utilise une fenêtre initiale de 24 heures puis un chevauchement de

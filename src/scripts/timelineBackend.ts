@@ -10,7 +10,9 @@ export async function collectTimelines(
 	database: Database.Database,
 	getTimeline: (id: string) => Promise<unknown | null>,
 	withinBudget: () => boolean,
+	onProgress: (message: string) => void = () => {},
 ) {
+	onProgress('Timelines : préparation de la file Flex à cinq');
 	const enqueue = database.prepare(`INSERT OR IGNORE INTO match_timelines (match_id, updated_at) VALUES (?, ?)`);
 	database.transaction(() => {
 		for (const match of getMatches(database)) enqueue.run(match.id, Date.now());
@@ -26,8 +28,11 @@ export async function collectTimelines(
 	let collected = 0;
 	let unavailable = 0;
 	const failures: string[] = [];
+	onProgress(`Timelines : ${pending.length} prêtes sélectionnées · limite=${TIMELINES_PER_RUN}`);
+	let processed = 0;
 	for (const row of pending) {
 		if (!withinBudget()) break;
+		onProgress(`Timeline ${++processed}/${pending.length} : ${row.id} · tentative=${row.attempts + 1}`);
 		try {
 			const { info, teamId, members } = validatedLineup(database, row.id, row.rawJson, row.startedAt, row.durationS);
 			if (info.queueId !== 440 || members.length !== 5) throw new Error('Timeline is not a full-team Flex match');
@@ -38,12 +43,14 @@ export async function collectTimelines(
 				.run(summary ? 'ready' : 'unavailable', summary ? JSON.stringify(summary) : null, Date.now(), row.id);
 			if (summary) collected += 1;
 			else unavailable += 1;
+			onProgress(`Timeline ${row.id} : ${summary ? 'enregistrée' : 'absente chez Riot'}`);
 		} catch (error) {
 			const message = `Timeline ${row.id}: ${error instanceof Error ? error.message : String(error)}`;
 			const delay = deferredRetryDelay(error, row.attempts);
 			database.prepare(`UPDATE match_timelines SET attempts = attempts + 1, next_attempt_at = ?,
 				last_error = ?, updated_at = ? WHERE match_id = ?`).run(Date.now() + delay, message, Date.now(), row.id);
 			failures.push(message);
+			onProgress(`Échec différé : ${message} · reprise dans ${Math.ceil(delay / 1000)} s`);
 			if (error instanceof RateLimitError || (error instanceof HttpError && [401, 403].includes(error.status))) break;
 		}
 	}
