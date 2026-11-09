@@ -21,6 +21,7 @@ pnpm-debug.log*
 
 # Local application data
 data/
+.cache/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal

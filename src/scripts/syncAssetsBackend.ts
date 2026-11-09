@@ -3,6 +3,7 @@ import { mkdir, rename, writeFile, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { request, type RequestOptions } from '../lib/backendHttp';
 import { championId } from '../lib/lol';
+import { profileImageCachePath } from '../lib/profile-images';
 import { riotHeaders } from '../lib/riot';
 
 const DD_BASE = 'https://ddragon.leagueoflegends.com';
@@ -34,6 +35,7 @@ export async function syncAssets(database: Database.Database, dependencies: {
 	request?: (url: string, options?: RequestOptions) => Promise<Response>;
 	save?: (path: string, data: string | Buffer) => Promise<void>;
 	headers?: Record<string, string>;
+	profileCacheDirectory?: string;
 } = {}) {
 	const fetchAsset = dependencies.request ?? request;
 	const write = dependencies.save ?? save;
@@ -90,7 +92,8 @@ export async function syncAssets(database: Database.Database, dependencies: {
 				typeof summoner.profileIconId !== 'number' || !Number.isInteger(summoner.profileIconId) || summoner.profileIconId < 0) {
 				throw new Error('Invalid summoner response');
 			}
-			await image(`${cdn}/img/profileicon/${summoner.profileIconId}.png`, join('public', 'riot', 'profiles', `${puuid}.png`));
+			await image(`${cdn}/img/profileicon/${summoner.profileIconId}.png`,
+				profileImageCachePath(puuid, dependencies.profileCacheDirectory));
 		});
 	}
 	return { saved, failures };

@@ -19,9 +19,9 @@ it('versions original image bytes in production and leaves development URLs unch
 	const bytes = await readFile(new URL('../../public/riot/champions/Ahri.png', import.meta.url));
 	const hash = createHash('sha256').update(bytes).digest('hex');
 	expect(urls['/riot/champions/Ahri.png']).toBe(`/_astro/riot/${hash}.png`);
-	expect(Object.keys(urls).some((path) => path.startsWith('/riot/profiles/'))).toBe(true);
+	expect(Object.keys(urls).some((path) => path.startsWith('/riot/profiles/'))).toBe(false);
 	expect(Object.keys(urls).some((path) => path.startsWith('/riot/ranks/'))).toBe(true);
-	expect(Object.keys(urls).length).toBeGreaterThan(170);
+	expect(Object.keys(urls).length).toBeGreaterThan(165);
 	await Reflect.apply(setup, undefined, [{ ...context, command: 'dev' }]);
 	expect(configs[1]).toEqual({ vite: { define: { __RIOT_ASSETS__: '{}' } } });
 });

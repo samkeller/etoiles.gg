@@ -87,5 +87,5 @@ export function rankEmblem(tier: string): string | null {
 }
 
 export function profileIcon(puuid: string): string {
-	return riotAsset(`/riot/profiles/${puuid}.png`);
+	return `/api/profile-icons/${encodeURIComponent(puuid)}.png`;
 }

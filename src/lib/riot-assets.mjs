@@ -14,7 +14,7 @@ export function riotAssets() {
 				/** @type {Record<string, string>} */
 				const urls = {};
 				if (command === 'build') {
-					for (const group of ['champions', 'profiles', 'ranks']) {
+					for (const group of ['champions', 'ranks']) {
 						const directory = new URL(`riot/${group}/`, config.publicDir);
 						for (const name of await readdir(directory)) {
 							if (!name.endsWith('.png')) continue;

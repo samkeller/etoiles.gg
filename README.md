@@ -317,15 +317,17 @@ Pas de vues matérialisées, Redis, ORM ni schéma en étoile à ce stade. Le pr
 persistant ne devient utile que si les mesures en production montrent que la première
 consultation ou la reconstruction après synchronisation pénalise réellement l'usage.
 
-### Cache navigateur des images Riot
+### Images Riot
 
-Au build, les portraits de champions, profils et emblèmes de rang sont copiés sans
-transformation vers `_astro/riot/`, avec une empreinte SHA-256 de leur contenu dans
-l'URL. L'adaptateur Node leur applique `Cache-Control: public, max-age=31536000, immutable` :
-le navigateur peut les réutiliser entre pages et visites sans requête de validation.
-Une image modifiée obtient une nouvelle URL au prochain build. Les helpers partagés
-utilisent ces URLs côté serveur et dans la draft côté client ; en développement, ils
-conservent les URLs originales. Aucun préchargement massif ni service worker n'est ajouté.
+Les portraits de champions et emblèmes de rang sont intégrés au build dans `_astro/riot/`
+avec une empreinte SHA-256 et peuvent être mis en cache durablement par le navigateur.
+Les avatars de joueurs sont servis par `/api/profile-icons/{puuid}.png` : la route ne
+répond que pour les joueurs enregistrés, télécharge l'icône depuis Riot et Data Dragon
+à la demande, puis la met en cache sur le volume persistant à côté de la base SQLite.
+`syncAssets` peut préremplir ce même cache; aucun redémarrage ni rebuild n'est requis
+pour les nouveaux avatars. Le navigateur conserve la réponse une heure; le serveur
+rafraîchit son cache après 24 heures et sert une ancienne image si l'amont est
+temporairement indisponible.
 
 ## Déployer sur Railway
 
@@ -432,9 +434,10 @@ ainsi que les erreurs des runs et l'expiration de la clé Riot.
   de backup SQLite (`better-sqlite3`), puis le téléverser sur le volume **service arrêté**.
   Ne pas copier uniquement `etoiles.db` pendant une écriture : des transactions peuvent
   encore se trouver dans `etoiles.db-wal`.
-- Les assets Riot sont inclus dans le build : lancer `syncAssets` en local, vérifier
-  puis versionner les assets mis à jour et reconstruire. Une écriture dans `public`
-  sur le conteneur n'actualise pas les assets compilés et ne survit pas au redéploiement.
+- Les icônes de champions et emblèmes de rang sont intégrés au build : lancer `syncAssets`
+  en local, vérifier puis versionner les changements dans `public` et les noms français
+  avant de reconstruire. Les avatars de profil sont mis en cache sur le volume Railway
+  et servis à la demande; `syncAssets` sur le serveur peut préremplir ce cache.
 
 Références : [volumes Railway](https://docs.railway.com/volumes),
 [healthchecks](https://docs.railway.com/deployments/healthchecks),
