@@ -26,14 +26,6 @@ const { moments, label, compact = false } = Astro.props;
 				</span>
 				<OpggIcon name="ui-arrow-right" class="size-3 shrink-0 text-gold-300 transition-transform group-hover:translate-x-1" />
 			</a>
-			{moment.matchIds.length > 1 && (
-				<details class="border-t border-white/8 px-4 py-2 text-xs">
-					<summary class="focus-ring cursor-pointer text-muted">Les {moment.matchIds.length} parties</summary>
-					<ol class="mt-2 flex flex-wrap gap-2 pb-2">
-						{moment.matchIds.map((id, i) => <li><a href={`/matches/${id}`} class="focus-ring border border-white/15 px-2 py-1 text-gold-200 hover:border-gold-300">{i + 1}<span class="sr-only"> · {id}</span></a></li>)}
-					</ol>
-				</details>
-			)}
 		</MotionItem>
 	))}
 </ul>

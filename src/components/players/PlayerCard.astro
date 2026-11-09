@@ -1,15 +1,20 @@
 ---
-import Avatar from '../ui/Avatar.astro';
-import ChampionIcon from '../ui/ChampionIcon.astro';
-import ChampionTile from '../ui/ChampionTile.astro';
-import OpggIcon from '../ui/OpggIcon.astro';
-import Panel from '../ui/Panel.astro';
-import RoleIcon from '../ui/RoleIcon.astro';
-import Sparkline from '../ui/Sparkline.astro';
-import StatRow from '../ui/StatRow.astro';
-import { formatDecimal, formatKda, formatPercent, formatShortDate } from '../../lib/format';
-import { championName, profileIcon, roleLabel } from '../../lib/lol';
-import { RECENT_WINDOW, type PlayerProfile } from '../../lib/stats';
+import Avatar from "../ui/Avatar.astro";
+import ChampionIcon from "../ui/ChampionIcon.astro";
+import ChampionTile from "../ui/ChampionTile.astro";
+import OpggIcon from "../ui/OpggIcon.astro";
+import Panel from "../ui/Panel.astro";
+import RoleIcon from "../ui/RoleIcon.astro";
+import Sparkline from "../ui/Sparkline.astro";
+import StatRow from "../ui/StatRow.astro";
+import {
+	formatDecimal,
+	formatKda,
+	formatPercent,
+	formatShortDate,
+} from "../../lib/format";
+import { championName, profileIcon, roleLabel } from "../../lib/lol";
+import { RECENT_WINDOW, type PlayerProfile } from "../../lib/stats";
 
 interface Props {
 	player: PlayerProfile;
@@ -17,38 +22,60 @@ interface Props {
 
 const { player } = Astro.props;
 const signature = player.champions.slice(0, 3);
-const showsVision = player.mainRole === 'UTILITY';
+const showsVision = player.mainRole === "UTILITY";
 const perMinute = showsVision ? player.visionPerMinute : player.csPerMinute;
 const recentIsUp =
 	player.recentKillParticipation !== null &&
 	player.killParticipation !== null &&
 	player.recentKillParticipation > player.killParticipation;
-const percent = (value: number | null) => (value === null ? '—' : formatPercent(value));
+const percent = (value: number | null) =>
+	value === null ? "—" : formatPercent(value);
 ---
 
-<Panel as="article" class="flex h-full flex-col px-5 pt-6 pb-5" aria-label={`Fiche de ${player.name}`}>
+<Panel
+	as="article"
+	class="relative flex h-full flex-col px-5 pt-6 pb-5"
+	aria-label={`Fiche de ${player.name}`}
+>
+	<a
+		href={`/players/${player.puuid}`}
+		class="focus-ring absolute -right-3 -top-3 inline-flex min-h-10 items-center justify-center gap-2 border border-sky-300/25 bg-sky-300/5 px-3 text-xs font-medium text-sky-200 transition-colors hover:border-sky-300/55 hover:bg-sky-300/10 hover:text-ink"
+		data-tip={`Profil`}
+	>
+		<OpggIcon name="ui-arrow-right" class="size-4" />
+	</a>
 	<header class="flex flex-col items-center text-center">
 		<p class="label-caps flex items-center gap-1.5 text-gold-200">
 			<RoleIcon role={player.mainRole} class="size-4" />
 			{roleLabel(player.mainRole)}
 		</p>
 		<Avatar src={profileIcon(player.puuid)} class="mt-4 size-20" />
-		<h3 class="mt-4 font-display text-xl font-bold text-ink">{player.name}</h3>
+		<h3 class="mt-4 font-display text-xl font-bold text-ink">
+			{player.name}
+		</h3>
 		{player.tagLine && <p class="text-xs text-muted">#{player.tagLine}</p>}
 	</header>
-	<a href={`/players/${player.puuid}`} class="focus-ring mt-4 inline-flex min-h-10 items-center justify-center gap-2 border border-sky-300/25 bg-sky-300/5 px-3 text-xs font-medium text-sky-200 transition-colors hover:border-sky-300/55 hover:bg-sky-300/10 hover:text-ink">
-		Voir ses parties à cinq <OpggIcon name="ui-arrow-right" class="size-3 -rotate-45" />
-	</a>
 
 	{
 		player.games === 0 ? (
-			<p class="mt-6 text-center text-sm text-muted">Pas encore de match joué à cinq.</p>
+			<p class="mt-6 text-center text-sm text-muted">
+				Pas encore de match joué à cinq.
+			</p>
 		) : (
 			<>
-				<section class="mt-6" aria-label="Champions les plus joués à cinq">
+				<section
+					class="mt-6"
+					aria-label="Champions les plus joués à cinq"
+				>
 					<ul class="flex justify-center gap-5">
 						{signature.map((record) => (
-							<li><ChampionTile {...record} size="lg" context="À cinq" /></li>
+							<li>
+								<ChampionTile
+									{...record}
+									size="lg"
+									context="À cinq"
+								/>
+							</li>
 						))}
 					</ul>
 				</section>
@@ -56,16 +83,32 @@ const percent = (value: number | null) => (value === null ? '—' : formatPercen
 				<dl class="mt-5 divide-y divide-gold-700/40 border-y border-gold-700/40">
 					<StatRow
 						label="KDA"
-						value={player.kda === null ? '—' : formatDecimal(player.kda)}
-						hint={[player.averageKills, player.averageDeaths, player.averageAssists]
+						value={
+							player.kda === null
+								? "—"
+								: formatDecimal(player.kda)
+						}
+						hint={[
+							player.averageKills,
+							player.averageDeaths,
+							player.averageAssists,
+						]
 							.map((value) => formatDecimal(value ?? 0))
-							.join(' / ')}
+							.join(" / ")}
 					/>
-					<StatRow label="Part. aux kills" value={percent(player.killParticipation)} />
-					<StatRow label="Part des dégâts" value={percent(player.damageShare)} />
 					<StatRow
-						label={showsVision ? 'Vision / min' : 'CS / min'}
-						value={perMinute === null ? '—' : formatDecimal(perMinute)}
+						label="Part. aux kills"
+						value={percent(player.killParticipation)}
+					/>
+					<StatRow
+						label="Part des dégâts"
+						value={percent(player.damageShare)}
+					/>
+					<StatRow
+						label={showsVision ? "Vision / min" : "CS / min"}
+						value={
+							perMinute === null ? "—" : formatDecimal(perMinute)
+						}
 					/>
 				</dl>
 
@@ -74,13 +117,30 @@ const percent = (value: number | null) => (value === null ? '—' : formatPercen
 						<figcaption class="flex items-baseline justify-between gap-2">
 							<span class="label-caps text-muted">KP</span>
 							{player.recentKillParticipation !== null && (
-								<span class:list={['text-xs tabular-nums', recentIsUp ? 'text-gold-200' : 'text-muted']}>
-									{recentIsUp && <span aria-hidden="true">▲ </span>}
-									{RECENT_WINDOW} derniers : {formatPercent(player.recentKillParticipation)}
+								<span
+									class:list={[
+										"text-xs tabular-nums",
+										recentIsUp
+											? "text-gold-200"
+											: "text-muted",
+									]}
+								>
+									{recentIsUp && (
+										<span aria-hidden="true">▲ </span>
+									)}
+									{RECENT_WINDOW} derniers :{" "}
+									{formatPercent(
+										player.recentKillParticipation,
+									)}
 								</span>
 							)}
 						</figcaption>
-						<Sparkline id={player.puuid} values={player.progression} baseline={player.killParticipation} class="mt-2 h-12 w-full" />
+						<Sparkline
+							id={player.puuid}
+							values={player.progression}
+							baseline={player.killParticipation}
+							class="mt-2 h-12 w-full"
+						/>
 					</figure>
 				)}
 
@@ -93,13 +153,22 @@ const percent = (value: number | null) => (value === null ? '—' : formatPercen
 							aria-haspopup="dialog"
 							class="focus-ring mt-2 flex w-full items-center gap-3 border border-gold-700/60 bg-night-950/50 p-2 text-left transition-colors hover:border-gold-300 hover:bg-gold-700/20"
 						>
-							<ChampionIcon champion={player.bestGame.champion} size="md" outcome={player.bestGame.outcome} />
+							<ChampionIcon
+								champion={player.bestGame.champion}
+								size="md"
+								outcome={player.bestGame.outcome}
+							/>
 							<span class="flex min-w-0 flex-col">
 								<span class="font-display font-bold tabular-nums text-ink">
-									{formatKda(player.bestGame.kills, player.bestGame.deaths, player.bestGame.assists)}
+									{formatKda(
+										player.bestGame.kills,
+										player.bestGame.deaths,
+										player.bestGame.assists,
+									)}
 								</span>
 								<span class="truncate text-xs text-muted">
-									{championName(player.bestGame.champion)} · {formatShortDate(player.bestGame.startedAt)}
+									{championName(player.bestGame.champion)} ·{" "}
+									{formatShortDate(player.bestGame.startedAt)}
 								</span>
 							</span>
 						</button>
