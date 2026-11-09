@@ -62,11 +62,13 @@ const yearOptions = [
 <BaseLayout title={`Mémoire des Étoiles — ${TEAM_NAME}`} description="La chronologie des soirées et des matchs joués à cinq par les Étoiles de l’Esport.">
 	<main class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-10 px-4 py-12 sm:px-8 sm:py-16">
 		<header class="flex flex-wrap items-end justify-between gap-6">
-			<p class="label-caps flex items-center gap-3 text-sky-300">
-				<span class="h-px w-8 bg-sky-300/70" aria-hidden="true"></span>
-				Mémoire
-			</p>
-			
+			<div>
+				<p class="label-caps flex items-center gap-3 text-gold-200">
+					<span class="size-1.5 rotate-45 bg-gold-200" aria-hidden="true"></span>
+					Mémoire
+				</p>
+				<h1 class="mt-2 font-display text-4xl font-medium tracking-tight text-ink sm:text-5xl">La mémoire des Étoiles</h1>
+			</div>
 			{years.length > 1 && <SegmentedNav label="Période" options={yearOptions} />}
 		</header>
 

@@ -39,7 +39,8 @@ const percent = (value: number | null) =>
 >
 	<a
 		href={`/players/${player.puuid}`}
-		class="focus-ring absolute -right-3 -top-3 inline-flex min-h-10 items-center justify-center gap-2 border border-sky-300/25 bg-sky-300/5 px-3 text-xs font-medium text-sky-200 transition-colors hover:border-sky-300/55 hover:bg-sky-300/10 hover:text-ink"
+		class="focus-ring absolute -right-3 -top-3 inline-flex min-h-10 items-center justify-center gap-2 border border-hextech-300/25 bg-hextech-300/5 px-3 text-xs font-medium text-hextech-300 transition-colors hover:border-hextech-300/55 hover:bg-hextech-300/10 hover:text-ink"
+		aria-label={`Profil de ${player.name}`}
 		data-tip={`Profil`}
 	>
 		<OpggIcon name="ui-arrow-right" class="size-4" />

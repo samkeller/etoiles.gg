@@ -1,16 +1,13 @@
 ---
 import type { Discovery } from '../../lib/stats/insights';
-import type { MatchSummary } from '../../lib/stats/matches';
-import { formatShortDate } from '../../lib/format';
 import ChampionIcon from '../ui/ChampionIcon.astro';
-interface Props { discoveries: readonly Discovery[]; matches: readonly MatchSummary[]; }
-const { discoveries, matches } = Astro.props;
-const byId = new Map(matches.map((match) => [match.id, match]));
+import SectionHeading from '../ui/SectionHeading.astro';
+interface Props { discoveries: readonly Discovery[]; }
+const { discoveries } = Astro.props;
 ---
 {discoveries.length > 0 && (
-	<section aria-label="Découvertes à cinq">
-		<p class="label-caps text-hextech-300">Dans nos parties à cinq</p>
-		<h2 class="mt-2 font-display text-3xl text-ink">Ce qui se dessine</h2>
+	<section aria-labelledby="discoveries-heading">
+		<SectionHeading id="discoveries-heading" eyebrow="Dans nos parties à cinq" title="Ce qui se dessine" />
 		<div class="mt-5 grid gap-4 lg:grid-cols-3">
 			{discoveries.map((discovery) => (
 				<article class="min-w-0 border-l border-hextech-300/40 bg-night-900/40 p-5">

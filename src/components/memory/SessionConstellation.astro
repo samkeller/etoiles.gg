@@ -16,7 +16,7 @@ const visibleSessions = compact ? sessions.slice(0, 3) : sessions;
 <section id="memory-title" aria-labelledby="memory-heading">
 	<header class="flex flex-wrap items-end justify-between gap-5">
 		<div>
-			<p class="label-caps text-sky-300">La constellation des soirées</p>
+			<p class="label-caps text-hextech-300">La constellation des soirées</p>
 			<h2 id="memory-heading" class="mt-2 font-display text-3xl text-ink sm:text-4xl">L’histoire, match après match.</h2>
 		</div>
 		{compact && <a href="/history" class="focus-ring inline-flex items-center gap-2 border-b border-white/20 pb-2 text-sm text-muted transition-colors hover:border-gold-200 hover:text-ink">Toute la chronologie <OpggIcon name="ui-arrow-right" class="size-4"  /></a>}
@@ -28,10 +28,10 @@ const visibleSessions = compact ? sessions.slice(0, 3) : sessions;
 				Aucune soirée à cinq n’est encore archivée. Les matchs incomplets ne sont pas mélangés à cette mémoire collective.
 			</p>
 		) : (
-			<ol class="relative mt-8 ml-2 border-l border-sky-300/20 pl-7 sm:ml-4 sm:pl-10">
+			<ol class="relative mt-8 ml-2 border-l border-hextech-300/20 pl-7 sm:ml-4 sm:pl-10">
 				{visibleSessions.map((session) => (
 					<li id={`session-${Math.floor(session.startedAt / 60_000)}`} class="relative pb-8 last:pb-0">
-						<span aria-hidden="true" class="absolute -left-[2.05rem] top-1 grid size-5 place-items-center rounded-full border border-sky-300/30 bg-night-950 sm:-left-[2.8rem]">
+						<span aria-hidden="true" class="absolute -left-[2.05rem] top-1 grid size-5 place-items-center rounded-full border border-hextech-300/30 bg-night-950 sm:-left-[2.8rem]">
 							<OpggIcon name="star" class="size-3 text-gold-200" />
 						</span>
 						<div class="grid gap-4 lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-8">

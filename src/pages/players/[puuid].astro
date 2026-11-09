@@ -18,7 +18,8 @@ import Discoveries from '../../components/collective/Discoveries.astro';
 import { db } from '../../lib/db/db';
 import { formatDecimal, formatKda, formatPercent, formatSince, formatShortDate, pluralize } from '../../lib/format';
 import { championName, profileIcon, roleLabel, tierLabel } from '../../lib/lol';
-import { getIndividualProfiles, getPlayers, getTeamStories, getDiscoveries, getMatches, MIN_DRAFT_GAMES, type RankedMatch } from '../../lib/stats';
+import { SITE_NAME } from '../../lib/site';
+import { getIndividualProfiles, getPlayers, getTeamStories, getDiscoveries, MIN_DRAFT_GAMES, type RankedMatch } from '../../lib/stats';
 
 export const prerender = false;
 
@@ -81,7 +82,7 @@ const moments = getTeamStories(db).events.filter((moment) => moment.puuid === pu
 const discoveries = getDiscoveries(db).filter((discovery) => discovery.puuid === puuid);
 ---
 
-<BaseLayout title={`${profile.name} — etoiles.win`} description={`Les champions, les parties à cinq et le parcours classé de ${profile.name}.`}>
+<BaseLayout title={`${profile.name} — ${SITE_NAME}`} description={`Les champions, les parties à cinq et le parcours classé de ${profile.name}.`}>
 	<main class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-10 px-4 py-8 sm:px-8 sm:py-12">
 		<a href="/#roster-title" class="focus-ring inline-flex w-fit items-center gap-2 text-sm text-muted transition-colors hover:text-ink">
 			<OpggIcon name="ui-arrow-right" class="size-3 rotate-180" /> Les cinq Étoiles
@@ -90,7 +91,7 @@ const discoveries = getDiscoveries(db).filter((discovery) => discovery.puuid ===
 		<header class="grid items-center gap-6 border-b border-white/10 pb-8 sm:grid-cols-[auto_minmax(0,1fr)_auto]">
 			<Avatar src={profileIcon(profile.puuid)} class="size-20 sm:size-24" />
 			<div class="min-w-0">
-				<h1 class="font-display text-4xl break-words text-ink sm:text-5xl">
+				<h1 class="font-display text-4xl font-medium tracking-tight break-words text-ink sm:text-5xl">
 					{profile.name}{profile.tagLine && <span class="ml-2 text-xl text-grey-700 sm:text-2xl">#{profile.tagLine}</span>}
 				</h1>
 				{teamProfile?.mainRole && (
@@ -242,7 +243,7 @@ const discoveries = getDiscoveries(db).filter((discovery) => discovery.puuid ===
 						</Panel>
 					))}
 				</div>
-				<Discoveries discoveries={discoveries} matches={discoveries.length ? getMatches(db) : []} />
+				<Discoveries discoveries={discoveries} />
 			</aside>
 		</div>
 

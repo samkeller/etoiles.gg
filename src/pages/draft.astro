@@ -7,6 +7,7 @@ import Panel from '../components/ui/Panel.astro';
 import SectionHeading from '../components/ui/SectionHeading.astro';
 import { db } from '../lib/db/db';
 import { formatPercent, formatSince, pluralize } from '../lib/format';
+import { SITE_NAME } from '../lib/site';
 import { championName, compareRoles } from '../lib/lol';
 import championNames from '../lib/lol/champion-names.json';
 import {
@@ -56,13 +57,16 @@ const draftData = JSON.stringify({
 const toolButton = 'focus-ring inline-flex min-h-9 items-center gap-2 border border-white/12 px-3 text-xs text-muted transition-colors hover:border-gold-200/50 hover:text-ink';
 ---
 
-<BaseLayout title="Draft — etoiles.win" description="Préparer une draft à partir des champions réellement joués à cinq par les Étoiles.">
+<BaseLayout title={`Draft — ${SITE_NAME}`} description="Préparer une draft à partir des champions réellement joués à cinq par les Étoiles.">
 	<main class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-10 px-4 py-10 sm:px-8 sm:py-14">
 		<header class="flex flex-wrap items-end justify-between gap-4">
-			<p class="label-caps flex items-center gap-3 text-sky-300">
-				<span class="h-px w-8 bg-sky-300/70" aria-hidden="true"></span>
-				Draft
-			</p>
+			<div>
+				<p class="label-caps flex items-center gap-3 text-gold-200">
+					<span class="size-1.5 rotate-45 bg-gold-200" aria-hidden="true"></span>
+					Draft
+				</p>
+				<h1 class="mt-2 font-display text-4xl font-medium tracking-tight text-ink sm:text-5xl">Préparer une composition</h1>
+			</div>
 			<div class="flex gap-2">
 				<button id="draft-copy" type="button" disabled class:list={[toolButton, 'disabled:cursor-not-allowed disabled:opacity-40']}>
 					<OpggIcon name="ui-copy" class="size-3.5" /> <span data-copy-label>Copier le lien</span>
@@ -86,7 +90,7 @@ const toolButton = 'focus-ring inline-flex min-h-9 items-center gap-2 border bor
 		<div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
 			<div class="flex min-w-0 flex-col gap-6">
 				<Panel as="section" aria-labelledby="verdict-title" class="p-5 sm:p-7">
-					<h2 id="verdict-title" class="label-caps text-gold-200">Dans nos parties à cinq</h2>
+					<h2 id="verdict-title" class="font-display text-xl font-medium tracking-tight text-ink">Dans nos parties à cinq</h2>
 					<p data-verdict-empty class="mt-4 text-sm text-muted">Un pick suffit pour voir son historique ; plusieurs révèlent leurs associations.</p>
 					<div data-verdict hidden aria-live="polite" class="mt-5 grid gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
 						<div>
@@ -144,7 +148,7 @@ const toolButton = 'focus-ring inline-flex min-h-9 items-center gap-2 border bor
 
 			<aside aria-labelledby="bans-title" class="xl:sticky xl:top-24">
 			<Panel class="p-5">
-				<h2 id="bans-title" class="label-caps text-gold-200">Nos bans habituels</h2>
+				<h2 id="bans-title" class="font-display text-xl font-medium tracking-tight text-ink">Nos bans habituels</h2>
 				{bans.records.length === 0 ? (
 					<p class="mt-3 text-sm text-muted">Aucune phase de bans enregistrée.</p>
 				) : (
