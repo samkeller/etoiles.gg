@@ -8,6 +8,7 @@ describe('getIndividualProfiles', () => {
 	it('keeps Solo/Duo and Flex activity separate from five-player team statistics', () => {
 		const database = createTestDatabase();
 		addPlayer(database, 'player-0', 'Étoile');
+		addPlayer(database, 'player-1', 'Compagnon');
 		addMatch(database, {
 			id: 'EUW1_100',
 			startedAt: 100,
@@ -40,7 +41,10 @@ describe('getIndividualProfiles', () => {
 			currentRank: { tier: 'GOLD', division: 'II', leaguePoints: 35 },
 		});
 		expect(profile.flex).toMatchObject({ games: 1, wins: 1 });
-		expect(profile.soloDuo.recentMatches[0]).toMatchObject({ id: 'EUW1_200', queue: 'soloDuo', outcome: 'loss' });
+		expect(profile.soloDuo.recentMatches[0]).toMatchObject({
+			id: 'EUW1_200', queue: 'soloDuo', outcome: 'loss', teamSize: 2,
+		});
+		expect(profile.flex.recentMatches[0].teamSize).toBe(2);
 	});
 
 	it('does not fabricate personal history or rank snapshots', () => {

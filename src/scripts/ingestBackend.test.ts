@@ -23,10 +23,12 @@ describe('ingestion', () => {
 			getFlexMatchIds: vi.fn().mockResolvedValueOnce(page).mockRejectedValueOnce(new RateLimitError('HTTP 429')),
 			getMatch: vi.fn(),
 		};
-		expect((await ingest(database, client, true)).failures).toEqual(['Collection player-0: HTTP 429']);
+		expect((await ingest(database, client, true)).failures).toEqual(['Flex collection player-0: HTTP 429']);
 		expect(client.getFlexMatchIds).toHaveBeenCalledTimes(2);
 		expect(client.getMatch).not.toHaveBeenCalled();
 		expect(database.prepare('SELECT * FROM ingest_cursors').all()).toEqual([]);
+		expect(database.prepare('SELECT puuid, queue_id AS queueId, next_start AS nextStart, is_complete AS isComplete FROM ingest_backfill_cursors')
+			.all()).toEqual([{ puuid: 'player-0', queueId: 440, nextStart: 100, isComplete: 0 }]);
 		expect(database.prepare('SELECT COUNT(*) AS count FROM ingest_pending').get()).toEqual({ count: 100 });
 		expect(database.prepare('SELECT status FROM ingest_runs').get()).toEqual({ status: 'failed' });
 	});
@@ -35,16 +37,30 @@ describe('ingestion', () => {
 		const database = createTestDatabase();
 		addPlayer(database, 'player-0', 'Original');
 		const client = {
-			getFlexMatchIds: vi.fn().mockResolvedValueOnce(['EUW1_1', 'EUW1_2']).mockResolvedValueOnce([]),
+			getFlexMatchIds: vi.fn().mockResolvedValueOnce(['EUW1_1', 'EUW1_2'])
+				.mockResolvedValueOnce([]).mockResolvedValueOnce([]),
 			getMatch: vi.fn().mockRejectedValueOnce(new RateLimitError('HTTP 429'))
-				.mockResolvedValueOnce(raw('EUW1_1')).mockResolvedValueOnce(raw('EUW1_2')),
+				.mockResolvedValueOnce(raw('EUW1_2')).mockResolvedValueOnce(raw('EUW1_1')),
 		};
-		expect((await ingest(database, client, true)).failures).toEqual(['Match EUW1_1: HTTP 429']);
-		expect(client.getMatch).toHaveBeenCalledTimes(1);
-		expect(database.prepare('SELECT COUNT(*) AS count FROM ingest_pending').get()).toEqual({ count: 2 });
-		expect((await ingest(database, client)).failures).toEqual([]);
-		expect(database.prepare('SELECT * FROM ingest_pending').all()).toEqual([]);
-		expect(database.prepare('SELECT COUNT(*) AS count FROM matches').get()).toEqual({ count: 2 });
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-11-09T08:00:00Z'));
+		try {
+			expect((await ingest(database, client, true)).failures).toEqual(['Match EUW1_1: HTTP 429']);
+			expect(client.getMatch).toHaveBeenCalledTimes(1);
+			expect(database.prepare('SELECT COUNT(*) AS count FROM ingest_pending').get()).toEqual({ count: 2 });
+			expect(database.prepare('SELECT attempts, next_attempt_at FROM ingest_pending WHERE match_id = ?')
+				.get('EUW1_1')).toEqual({ attempts: 1, next_attempt_at: Date.parse('2026-11-09T08:15:00Z') });
+			expect((await ingest(database, client)).failures).toEqual([]);
+			expect(client.getMatch).toHaveBeenCalledTimes(2);
+			expect(database.prepare('SELECT COUNT(*) AS count FROM matches').get()).toEqual({ count: 1 });
+			expect(database.prepare('SELECT match_id FROM ingest_pending').all()).toEqual([{ match_id: 'EUW1_1' }]);
+			vi.setSystemTime(new Date('2026-11-09T08:16:00Z'));
+			expect((await ingest(database, client)).failures).toEqual([]);
+			expect(database.prepare('SELECT match_id FROM ingest_pending').all()).toEqual([]);
+			expect(database.prepare('SELECT COUNT(*) AS count FROM matches').get()).toEqual({ count: 2 });
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it('repairs legacy incomplete matches behind the cursor even if no new IDs are listed', async () => {
@@ -57,7 +73,7 @@ describe('ingestion', () => {
 		expect((await ingest(database, client)).failures).toEqual([]);
 		expect(client.getMatch).toHaveBeenCalledWith('EUW1_1');
 		expect(database.prepare('SELECT COUNT(*) AS count FROM participants').get()).toEqual({ count: 5 });
-		expect(database.prepare('SELECT * FROM ingest_pending').all()).toEqual([]);
+		expect(database.prepare('SELECT match_id FROM ingest_pending').all()).toEqual([]);
 	});
 
 	it('keeps legacy data and pending repair when a fetched replacement fails atomically', async () => {
@@ -71,7 +87,7 @@ describe('ingestion', () => {
 		expect((await ingest(database, client)).failures).toHaveLength(1);
 		expect(database.prepare('SELECT COUNT(*) AS count FROM matches').get()).toEqual({ count: 1 });
 		expect(database.prepare('SELECT puuid, lineup_size FROM participants').all()).toEqual([{ puuid: 'player-0', lineup_size: 2 }]);
-		expect(database.prepare('SELECT * FROM ingest_pending').all()).toEqual([{ match_id: 'EUW1_1' }]);
+		expect(database.prepare('SELECT match_id FROM ingest_pending').all()).toEqual([{ match_id: 'EUW1_1' }]);
 		expect(database.prepare('SELECT game_name FROM players WHERE puuid = ?').get('player-0')).toEqual({ game_name: 'Original' });
 	});
 
@@ -82,7 +98,7 @@ describe('ingestion', () => {
 		const client = { getFlexMatchIds: vi.fn().mockResolvedValue(['EUW1_1']), getMatch: vi.fn().mockRejectedValue(new Error('offline')) };
 		expect((await ingest(database, client)).failures).toEqual(['Match EUW1_1: offline']);
 		expect(database.prepare('SELECT COUNT(*) AS count FROM participants').get()).toEqual({ count: 1 });
-		expect(database.prepare('SELECT * FROM ingest_pending').all()).toEqual([{ match_id: 'EUW1_1' }]);
+		expect(database.prepare('SELECT match_id FROM ingest_pending').all()).toEqual([{ match_id: 'EUW1_1' }]);
 		expect(database.prepare('SELECT status FROM ingest_runs').get()).toEqual({ status: 'failed' });
 	});
 
@@ -114,7 +130,7 @@ describe('ingestion', () => {
 		});
 		expect(database.prepare('SELECT queue_id AS queueId FROM matches WHERE match_id = ?').get('EUW1_420')).toEqual({ queueId: 420 });
 		expect(database.prepare('SELECT COUNT(*) AS count FROM participants WHERE match_id = ?').get('EUW1_420')).toEqual({ count: 1 });
-		expect(database.prepare('SELECT COUNT(*) AS count FROM individual_ingest_cursors WHERE queue_id = 420').get()).toEqual({ count: 1 });
+		expect(database.prepare('SELECT COUNT(*) AS count FROM ingest_backfill_cursors WHERE queue_id = 420').get()).toEqual({ count: 1 });
 		expect(database.prepare('SELECT COUNT(*) AS count FROM matches WHERE queue_id = 440').get()).toEqual({ count: 0 });
 
 		client.getRankedMatchIds.mockResolvedValue([]);
@@ -189,13 +205,21 @@ describe('ingestion', () => {
 		};
 		expect((await ingest(database, client, true)).failures).toEqual([]);
 		expect(client.getFlexMatchIds.mock.calls.map((call) => call[1].start)).toEqual([0, 100]);
+		expect(database.prepare('SELECT COUNT(*) AS count FROM matches').get()).toEqual({ count: 100 });
+		expect(database.prepare('SELECT match_id FROM ingest_pending').all()).toEqual([{ match_id: 'EUW1_100' }]);
+		client.getMatch.mockClear();
+		expect((await ingest(database, client, true)).failures).toEqual([]);
+		expect(client.getFlexMatchIds).toHaveBeenCalledTimes(2);
 		expect(database.prepare('SELECT COUNT(*) AS count FROM matches').get()).toEqual({ count: 101 });
+		expect(database.prepare('SELECT match_id FROM ingest_pending').all()).toEqual([]);
+
 		client.getFlexMatchIds.mockClear().mockResolvedValueOnce(page).mockResolvedValueOnce(['EUW1_100']);
 		client.getMatch.mockClear();
 		await ingest(database, client);
 		expect(client.getFlexMatchIds.mock.calls.map((call) => call[1].start)).toEqual([0, 100]);
 		expect(client.getFlexMatchIds.mock.calls[0][1].startTime).toBeTypeOf('number');
 		expect(client.getMatch).not.toHaveBeenCalled();
+		expect(database.prepare('SELECT COUNT(*) AS count FROM matches').get()).toEqual({ count: 101 });
 	});
 
 	it('retains failed older matches even after newer successes advance the cursor', async () => {
@@ -206,12 +230,19 @@ describe('ingestion', () => {
 			getMatch: vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(raw('EUW1_2', 200))
 				.mockResolvedValueOnce(raw('EUW1_1', 100)),
 		};
-		expect((await ingest(database, client)).failures).toHaveLength(1);
-		expect(database.prepare('SELECT status FROM ingest_runs').get()).toEqual({ status: 'failed' });
-		expect(database.prepare('SELECT match_id FROM ingest_pending').all()).toEqual([{ match_id: 'EUW1_1' }]);
-		expect((await ingest(database, client)).failures).toEqual([]);
-		expect(database.prepare('SELECT COUNT(*) AS count FROM matches').get()).toEqual({ count: 2 });
-		expect(database.prepare('SELECT * FROM ingest_pending').all()).toEqual([]);
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-11-09T08:00:00Z'));
+		try {
+			expect((await ingest(database, client)).failures).toHaveLength(1);
+			expect(database.prepare('SELECT status FROM ingest_runs').get()).toEqual({ status: 'failed' });
+			expect(database.prepare('SELECT match_id FROM ingest_pending').all()).toEqual([{ match_id: 'EUW1_1' }]);
+			vi.setSystemTime(new Date('2026-11-09T08:02:00Z'));
+			expect((await ingest(database, client)).failures).toEqual([]);
+			expect(database.prepare('SELECT COUNT(*) AS count FROM matches').get()).toEqual({ count: 2 });
+			expect(database.prepare('SELECT match_id FROM ingest_pending').all()).toEqual([]);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it('rolls back the match, participants and renamed players after an insertion failure', async () => {
@@ -225,7 +256,7 @@ describe('ingestion', () => {
 		expect(database.prepare('SELECT * FROM matches').all()).toEqual([]);
 		expect(database.prepare('SELECT * FROM participants').all()).toEqual([]);
 		expect(database.prepare('SELECT game_name FROM players WHERE puuid = ?').get('player-0')).toEqual({ game_name: 'Original' });
-		expect(database.prepare('SELECT * FROM ingest_pending').all()).toEqual([{ match_id: 'EUW1_1' }]);
+		expect(database.prepare('SELECT match_id FROM ingest_pending').all()).toEqual([{ match_id: 'EUW1_1' }]);
 	});
 
 	it('does not advance a player cursor when collection fails partway through', async () => {

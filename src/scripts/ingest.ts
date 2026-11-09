@@ -36,12 +36,14 @@ try {
 		}
 	}, 30_000);
 	riot.riotHeaders();
-	const result = await ingest(db, riot, process.argv.includes('--backfill'));
+	const backfill = process.argv.includes('--backfill');
+	const result = await ingest(db, riot, backfill);
 	for (const failure of result.failures) log.error(failure);
+	log.info(`File d’attente : ${result.pendingRemaining} match${result.pendingRemaining === 1 ? '' : 's'} restant${result.pendingRemaining === 1 ? '' : 's'}.`);
 	if (result.failures.length) {
 		process.exitCode = 1;
 	} else {
-		log.done(1, 'Ingestion', `${result.newMatches} nouveaux matchs d’équipe`);
+		log.done(1, backfill ? 'Lot de backfill' : 'Ingestion', `${result.newMatches} nouveaux matchs d’équipe`);
 	}
 } catch (error) {
 	if (lock) {

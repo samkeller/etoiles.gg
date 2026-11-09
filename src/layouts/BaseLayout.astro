@@ -4,6 +4,7 @@ import { SITE_NAME, TEAM_NAME } from '../lib/site';
 import { db } from '../lib/db/db';
 import { getSyncStatus } from '../lib/sync-status';
 import SyncStatus from '../components/ui/SyncStatus.astro';
+import TooltipLayer from '../components/ui/TooltipLayer.astro';
 
 interface Props {
 	title?: string;
@@ -16,10 +17,9 @@ const {
 } = Astro.props;
 const path = Astro.url.pathname;
 const navigation = [
-	{ href: '/#team-title', label: 'L’équipe', active: path === '/' },
-	{ href: '/#collective-title', label: 'Le collectif', active: path === '/' && Astro.url.hash === '#collective-title' },
+	{ href: '/', label: 'Accueil', active: path === '/' },
 	{ href: '/history', label: 'Mémoire', active: path.startsWith('/history') },
-	{ href: '/draft', label: 'Laboratoire', active: path.startsWith('/draft') },
+	{ href: '/draft', label: 'Draft', active: path.startsWith('/draft') },
 ];
 const syncStatus = getSyncStatus(db);
 ---
@@ -91,5 +91,6 @@ const syncStatus = getSyncStatus(db);
 				</div>
 			</footer>
 		</div>
+		<TooltipLayer />
 	</body>
 </html>

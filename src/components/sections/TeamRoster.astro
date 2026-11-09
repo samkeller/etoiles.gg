@@ -1,6 +1,7 @@
 ---
 import PlayerCard from '../players/PlayerCard.astro';
 import SectionHeading from '../ui/SectionHeading.astro';
+import MotionItem from '../ui/MotionItem.astro';
 import type { PlayerProfile } from '../../lib/stats';
 
 interface Props {
@@ -21,10 +22,10 @@ const { players } = Astro.props;
 			<p class="text-muted">Aucun joueur enregistré pour l'instant.</p>
 		) : (
 			<ul class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-				{players.map((player) => (
-					<li>
+				{players.map((player, index) => (
+					<MotionItem as="li" index={index}>
 						<PlayerCard player={player} />
-					</li>
+					</MotionItem>
 				))}
 			</ul>
 		)

@@ -15,7 +15,7 @@ it('distinguishes a never-synchronized database from a successful empty run', ()
 it('keeps last success after a failed run and reports pending matches and staleness', () => {
 	const database = createTestDatabase();
 	database.prepare("INSERT INTO ingest_runs (started_at, finished_at, new_matches, status) VALUES (1000, 2000, 3, 'ok'), (3000, 4000, 1, 'failed')").run();
-	database.prepare("INSERT INTO ingest_pending VALUES ('EUW1_1')").run();
+	database.prepare("INSERT INTO ingest_pending (match_id) VALUES ('EUW1_1')").run();
 	expect(getSyncStatus(database, 4000)).toMatchObject({
 		state: 'failed', lastSuccess: { finishedAt: 2000 }, pendingMatches: 1, stale: false,
 	});

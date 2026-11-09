@@ -4,19 +4,23 @@ import type { MatchOutcome } from '../../lib/stats';
 
 interface Props {
 	champion: string;
-	size?: 'sm' | 'md' | 'lg';
+	size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 	/** Teinte le cadre : or pour une victoire, gris pour une défaite. */
 	outcome?: MatchOutcome;
 	class?: string;
 	loading?: 'lazy' | 'eager';
+	/** Détail affiché sous le nom dans la bulle ; `false` désactive la bulle. */
+	tip?: string | false;
 }
 
-const { champion, size = 'md', outcome, class: className, loading = 'lazy' } = Astro.props;
+const { champion, size = 'md', outcome, class: className, loading = 'lazy', tip } = Astro.props;
 const name = championName(champion);
 const sizes = {
+	xs: 'size-6 text-[0.55rem]',
 	sm: 'size-7 text-[0.625rem]',
 	md: 'size-10 text-xs',
 	lg: 'size-14 text-sm',
+	xl: 'size-20 text-base',
 };
 ---
 
@@ -27,7 +31,8 @@ const sizes = {
 		outcome === 'win' ? 'border-gold-300' : outcome === 'loss' ? 'border-grey-700' : 'border-gold-700',
 		className,
 	]}
-	title={name}
+	data-tip-title={tip === false ? undefined : name}
+	data-tip={tip || undefined}
 >
 	<span aria-hidden="true">{name.slice(0, 2)}</span>
 	<img

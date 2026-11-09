@@ -2,8 +2,8 @@
 import DraftRow from './DraftRow.astro';
 import Disclosure from '../ui/Disclosure.astro';
 import Panel from '../ui/Panel.astro';
-import RoleSelect from '../ui/RoleSelect.astro';
 import { pluralize } from '../../lib/format';
+import { ROLE_ORDER, roleIcon, roleLabel } from '../../lib/lol';
 import type { DraftObservation, PendingDraftObservation } from '../../lib/stats';
 import type { Position } from '../../lib/types';
 
@@ -21,6 +21,17 @@ interface Props {
 const { title, id, observations, pending, baseline, minimumGames, composition = false, associationRoles = [] } = Astro.props;
 const visible = observations.slice(0, 4);
 const remaining = observations.slice(4);
+
+/** Un clic ajoute le rôle (deux au plus, le second est remplacé) ou le retire du filtre. */
+function roleHref(role: Position): string {
+	const next = associationRoles.includes(role)
+		? associationRoles.filter((current) => current !== role)
+		: [...associationRoles.slice(0, 1), role];
+	const params = new URLSearchParams();
+	next.forEach((value, index) => params.set(index === 0 ? 'role' : 'role2', value));
+	const query = params.toString();
+	return `/${query ? `?${query}` : ''}#collective-title`;
+}
 ---
 
 <Panel as="div" aria-labelledby={id}>
@@ -31,23 +42,28 @@ const remaining = observations.slice(4);
 		</p>
 	</header>
 	{!composition && (
-		<form action="/#collective-title" method="get" class="border-b border-gold-700/40 px-5 py-4 sm:px-7">
-			<fieldset>
-				<legend class="label-caps text-muted">Filtrer les synergies par rôles</legend>
-				<div class="mt-3 flex flex-wrap items-end gap-3">
-					{['role', 'role2'].map((name, index) => (
-						<RoleSelect
-							{name}
-							label={index === 0 ? 'Premier rôle' : 'Second rôle (facultatif)'}
-							value={associationRoles[index]}
-						/>
-					))}
-					<button type="submit" class="focus-ring h-12 border border-hextech-300/40 bg-hextech-300/5 px-5 font-display font-bold text-hextech-300 transition-colors hover:border-hextech-300 hover:bg-hextech-300/10 motion-reduce:transition-none">Appliquer</button>
-					<a href="/#collective-title" class="focus-ring px-2 py-2 text-xs text-muted underline underline-offset-4">Réinitialiser</a>
-				</div>
-				<p class="mt-3 text-xs text-muted">Un rôle : tous les duos qui le contiennent. Deux rôles : ce duo précis. Seuls les matchs joués à ces rôles comptent.</p>
-			</fieldset>
-		</form>
+		<nav aria-label="Filtrer les synergies par rôles" class="flex flex-wrap items-center gap-3 border-b border-gold-700/40 px-5 py-4 sm:px-7">
+			<span class="label-caps text-[0.65rem] text-muted">Rôles</span>
+			<ul class="flex gap-1">
+				{ROLE_ORDER.map((role) => {
+					const active = associationRoles.includes(role);
+					return (
+						<li>
+							<a href={roleHref(role)} aria-current={active ? 'true' : undefined}
+								data-tip-title={roleLabel(role)}
+								data-tip={active ? 'Retirer du filtre' : associationRoles.length >= 2 ? 'Remplace le second rôle' : 'Ajouter au filtre'}
+								class:list={['focus-ring grid size-10 place-items-center border transition-colors motion-reduce:transition-none',
+									active ? 'border-gold-200/70 bg-gold-200/12 shadow-glow-gold' : 'border-white/10 hover:border-white/30 hover:bg-white/5']}>
+								<img src={roleIcon(role)} alt={roleLabel(role)} width="34" height="34" class:list={['size-6 object-contain transition-opacity', !active && 'opacity-60']} />
+							</a>
+						</li>
+					);
+				})}
+			</ul>
+			{associationRoles.length > 0 && (
+				<a href="/#collective-title" class="focus-ring text-xs text-muted underline underline-offset-4 hover:text-ink">Tous les rôles</a>
+			)}
+		</nav>
 	)}
 	<p class="sr-only" role="status">{pluralize(observations.length, 'observation')} correspondant aux critères.</p>
 	{observations.length === 0 ? (

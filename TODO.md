@@ -39,6 +39,8 @@
 - [x] Vérifier HTTP, contenu PNG et réponses de profil ; écrire les assets atomiquement
   et retourner un code d'erreur en cas de synchronisation partielle.
 - [x] Partager un schéma SQL unique inclus dans le build de production.
+- [x] Overview par champions (profil : liste complète triable, accueil et Mémoire en icônes)
+- [x] Tooltips génériques via `data-tip` (`TooltipLayer`)
 
 ## Lot 4 — Exploitation
 

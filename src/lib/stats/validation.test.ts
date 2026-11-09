@@ -65,7 +65,7 @@ describe('shared persisted match validation', () => {
 		addMatch(database, { id: 'EUW1_2', startedAt: 2, won: true, members: fullLineup({ 0: { champion: 'FiddleSticks' } }) });
 		addMatch(database, { id: 'EUW1_3', startedAt: 3, won: true, members: fullLineup({ 0: { champion: 'Fiddlesticks' } }) });
 		expect(getMatches(database)).toHaveLength(3);
-		expect(getPlayers(database)[0].champions).toContainEqual({ champion: 'Fiddlesticks', games: 2, wins: 2 });
+		expect(getPlayers(database)[0].champions).toContainEqual({ champion: 'Fiddlesticks', games: 2, wins: 2, lastPlayedAt: 3, kda: 0 });
 	});
 
 	it('maps summoner spell fields and preserves missing fields as null', () => {

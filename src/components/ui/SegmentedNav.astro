@@ -1,0 +1,41 @@
+---
+interface Option {
+	href: string;
+	label: string;
+	active: boolean;
+	icon?: string;
+	/** Bulle facultative, utile quand le libellé est masqué sur mobile. */
+	tip?: string;
+}
+
+interface Props {
+	label: string;
+	options: readonly Option[];
+	class?: string;
+}
+
+const { label, options, class: className } = Astro.props;
+---
+
+<nav aria-label={label} class:list={['max-w-full overflow-x-auto', className]}>
+	<ul class="flex w-max border border-white/12 bg-night-950/60 p-0.5">
+		{options.map((option) => (
+			<li>
+				<a
+					href={option.href}
+					aria-current={option.active ? 'true' : undefined}
+					data-tip={option.tip}
+					class:list={[
+						'focus-ring flex min-h-9 items-center gap-2 px-3 text-xs whitespace-nowrap transition-colors motion-reduce:transition-none',
+						option.active
+							? 'bg-gold-200/12 text-gold-100 shadow-[inset_0_-2px_0_var(--color-gold-200)]'
+							: 'text-muted hover:bg-white/5 hover:text-ink',
+					]}
+				>
+					{option.icon && <img src={option.icon} alt="" width="20" height="20" class:list={['size-4 object-contain', !option.active && 'opacity-70']} />}
+					{option.label}
+				</a>
+			</li>
+		))}
+	</ul>
+</nav>

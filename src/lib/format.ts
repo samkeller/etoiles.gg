@@ -64,4 +64,35 @@ export function formatKdaIndicator(kills: number, deaths: number, assists: numbe
 export function pluralize(count: number, singular: string, plural = `${singular}s`): string {
 	return `${count.toLocaleString('fr-FR')} ${count === 1 ? singular : plural}`;
 }
+
+const relativeFormatter = new Intl.RelativeTimeFormat('fr-FR', { numeric: 'auto' });
+const DAY_MS = 86_400_000;
+
+/** « hier », « il y a 3 semaines »… — arrondi au jour, à la semaine, au mois puis à l'année. */
+export function formatSince(timestamp: number, now = Date.now()): string {
+	const days = Math.round((timestamp - now) / DAY_MS);
+	if (Math.abs(days) < 7) return relativeFormatter.format(days, 'day');
+	if (Math.abs(days) < 35) return relativeFormatter.format(Math.round(days / 7), 'week');
+	if (Math.abs(days) < 365) return relativeFormatter.format(Math.round(days / 30), 'month');
+	return relativeFormatter.format(Math.round(days / 365), 'year');
+}
+
+export interface RecordSummary {
+	games: number;
+	wins: number;
+	lastPlayedAt?: number | null;
+	kda?: number | null;
+}
+
+/**
+ * Texte de bulle pour un bilan : effectifs toujours visibles, taux uniquement
+ * à partir de `minimumGames` parties.
+ */
+export function recordTip(record: RecordSummary, minimumGames: number, now = Date.now()): string {
+	const lines = [`${pluralize(record.games, 'partie')} · ${record.wins} V – ${record.games - record.wins} D`];
+	if (record.games >= minimumGames && record.games > 0) lines.push(`${formatPercent(record.wins / record.games)} de victoires`);
+	if (record.kda !== undefined && record.kda !== null) lines.push(`KDA ${formatDecimal(record.kda)}`);
+	if (record.lastPlayedAt) lines.push(`Dernière : ${formatSince(record.lastPlayedAt, now)}`);
+	return lines.join('\n');
+}
 import { kdaRatio } from './stats/shared';

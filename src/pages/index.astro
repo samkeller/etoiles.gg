@@ -32,8 +32,8 @@ const recentMatches = fullMatches.slice(0, overview.recentForm.length).reverse()
 	<main class="flex w-full flex-1 flex-col gap-16 pb-16 sm:gap-24">
 		<TeamOverview overview={overview} recentMatches={recentMatches} latestSession={sessions[0] ?? null} />
 		<div class="mx-auto flex w-full max-w-7xl flex-col gap-16 px-4 sm:gap-24 sm:px-8">
-			<SessionConstellation sessions={sessions} compact />
 			<TeamRoster players={players} />
+			<SessionConstellation sessions={sessions} compact />
 			<MatchHistory fullMatches={fullMatches} partialMatches={partialMatches} />
 			<TeamCollective collective={collective} associationRoles={associationRoles} />
 		</div>

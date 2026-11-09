@@ -13,6 +13,12 @@ export interface ChampionRecord {
 	champion: string;
 	games: number;
 	wins: number;
+	lastPlayedAt: number;
+}
+
+/** Pick joué à cinq, avec le KDA cumulé sur ses parties. */
+export interface TeamChampionRecord extends ChampionRecord {
+	kda: number;
 }
 
 export interface RoleShare {
@@ -47,7 +53,7 @@ export interface PlayerProfile {
 	csPerMinute: number | null;
 	visionPerMinute: number | null;
 	/** Champions du plus joué au moins joué. */
-	champions: ChampionRecord[];
+	champions: TeamChampionRecord[];
 	/** Participation aux kills en moyenne glissante, du plus ancien au plus récent. */
 	progression: number[];
 	/** Participation aux kills sur les derniers matchs, si l'historique est plus long que la fenêtre. */
@@ -206,18 +212,23 @@ function countRoles(games: readonly GameLine[]): RoleShare[] {
 		.sort((left, right) => right.games - left.games || compareRoles(left.role, right.role));
 }
 
-function countChampions(games: readonly GameLine[]): ChampionRecord[] {
-	const records = new Map<string, ChampionRecord>();
+function countChampions(games: readonly GameLine[]): TeamChampionRecord[] {
+	const records = new Map<string, ChampionRecord & { kills: number; deaths: number; assists: number }>();
 	for (const game of games) {
-		const record = records.get(game.champion) ?? { champion: game.champion, games: 0, wins: 0 };
+		const record = records.get(game.champion) ??
+			{ champion: game.champion, games: 0, wins: 0, lastPlayedAt: game.startedAt, kills: 0, deaths: 0, assists: 0 };
 		record.games += 1;
 		record.wins += Number(game.won);
+		record.lastPlayedAt = Math.max(record.lastPlayedAt, game.startedAt);
+		record.kills += game.kills;
+		record.deaths += game.deaths;
+		record.assists += game.assists;
 		records.set(game.champion, record);
 	}
 
-	return [...records.values()].sort(
-		(left, right) => right.games - left.games || right.wins - left.wins || left.champion.localeCompare(right.champion),
-	);
+	return [...records.values()]
+		.map(({ kills, deaths, assists, ...record }) => ({ ...record, kda: kdaRatio(kills, deaths, assists) }))
+		.sort((left, right) => right.games - left.games || right.wins - left.wins || left.champion.localeCompare(right.champion));
 }
 
 function rollingKillParticipation(games: readonly GameLine[]): number[] {

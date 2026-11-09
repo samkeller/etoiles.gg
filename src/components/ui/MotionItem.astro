@@ -1,0 +1,18 @@
+---
+interface Props {
+	as?: 'div' | 'li';
+	index?: number;
+	delayStep?: number;
+	class?: string;
+}
+
+const { as: Tag = 'div', index = 0, delayStep = 35, class: className } = Astro.props;
+const delay = Math.max(0, Math.min(index, 20)) * Math.max(0, delayStep);
+---
+
+<Tag
+	class:list={['animate-rise motion-reduce:animate-none', className]}
+	style={`animation-delay: ${delay}ms`}
+>
+	<slot />
+</Tag>

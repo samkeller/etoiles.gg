@@ -10,11 +10,11 @@ const spell = summonerSpell(id);
 ---
 
 {spell ? (
-	<img src={`/riot/ui/summonerspells/${spell.icon}`} alt={spell.name} title={spell.name}
+	<img src={`/riot/ui/summonerspells/${spell.icon}`} alt={spell.name} data-tip-title={spell.name}
 		width="24" height="24" class="size-5 border border-gold-700 object-cover" />
 ) : (
 	<span class="grid size-5 place-items-center border border-grey-700 text-xs text-muted"
-		title={id === null ? 'Sort non renseigné' : `Sort inconnu : ${id}`}>
+		data-tip={id === null ? 'Sort non renseigné' : `Sort inconnu : ${id}`}>
 		?<span class="sr-only">{id === null ? 'Sort non renseigné' : `Sort inconnu : ${id}`}</span>
 	</span>
 )}

@@ -19,6 +19,8 @@ export interface ParticipantDto {
     puuid: string;
     teamId: TeamId;
     championName: string;
+    /** Clé numérique Data Dragon ; sert à résoudre les bans. */
+    championId?: number;
     champLevel: number;
     individualPosition: Position | 'Invalid';
     kills: number;
@@ -46,6 +48,8 @@ export interface TeamDto {
     teamId: TeamId;
     win: boolean;
     objectives: Record<ObjectiveName, { first: boolean; kills: number }>;
+    /** Absent des très anciennes réponses ; championId vaut -1 pour un ban non utilisé. */
+    bans?: { championId: number; pickTurn: number }[];
 }
 
 export interface MatchInfoDto {

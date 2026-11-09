@@ -1,11 +1,17 @@
 ---
 import MatchRow from '../components/matches/MatchRow.astro';
 import SessionConstellation from '../components/memory/SessionConstellation.astro';
+import ChampionTile from '../components/ui/ChampionTile.astro';
+import Panel from '../components/ui/Panel.astro';
+import SegmentedNav from '../components/ui/SegmentedNav.astro';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { db } from '../lib/db/db';
-import { getMatches, getTeamSessions } from '../lib/stats';
-import { formatDate, pluralize } from '../lib/format';
+import { getMatches, getTeamSessions, MIN_DRAFT_GAMES } from '../lib/stats';
+import { formatDate, formatPercent, pluralize } from '../lib/format';
+import { championId } from '../lib/lol';
 import { TEAM_NAME } from '../lib/site';
+
+const CHAMPION_LIMIT = 10;
 
 const fullMatches = getMatches(db, 'full');
 const partialMatches = getMatches(db, 'partial');
@@ -16,52 +22,101 @@ const selectedYear = requestedYear === 'all' || years.includes(requestedYear) ? 
 const sessions = selectedYear === 'all'
 	? allSessions
 	: allSessions.filter((session) => session.dateKey.startsWith(selectedYear));
-const filteredMatchCount = sessions.reduce((count, session) => count + session.matches.length, 0);
+const selectedMatches = sessions.flatMap((session) => session.matches);
+const matchCount = selectedMatches.length;
+const winCount = selectedMatches.filter((match) => match.outcome === 'win').length;
+
+const champions = new Map<string, { champion: string; games: number; wins: number; lastPlayedAt: number }>();
+for (const match of selectedMatches) {
+	for (const member of match.members) {
+		const champion = championId(member.champion);
+		const record = champions.get(champion) ?? { champion, games: 0, wins: 0, lastPlayedAt: match.startedAt };
+		record.games += 1;
+		record.wins += Number(match.outcome === 'win');
+		record.lastPlayedAt = Math.max(record.lastPlayedAt, match.startedAt);
+		champions.set(champion, record);
+	}
+}
+const mostPlayed = [...champions.values()]
+	.sort((left, right) => right.games - left.games || right.lastPlayedAt - left.lastPlayedAt)
+	.slice(0, CHAMPION_LIMIT);
+
+const yearOptions = [
+	{ href: '/history', label: 'Toutes', active: selectedYear === 'all', tip: `${pluralize(allSessions.length, 'soirée')} · ${pluralize(fullMatches.length, 'partie')}` },
+	...years.map((year) => {
+		const yearSessions = allSessions.filter((session) => session.dateKey.startsWith(year));
+		const games = yearSessions.reduce((total, session) => total + session.matches.length, 0);
+		return { href: `/history?year=${year}`, label: year, active: selectedYear === year, tip: `${pluralize(yearSessions.length, 'soirée')} · ${pluralize(games, 'partie')}` };
+	}),
+];
 ---
 
 <BaseLayout title={`Mémoire des Étoiles — ${TEAM_NAME}`} description="La chronologie des soirées et des matchs joués à cinq par les Étoiles de l’Esport.">
-	<main class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-12 px-4 py-12 sm:px-8 sm:py-16">
-		<header class="max-w-3xl">
-			<p class="label-caps text-sky-300">Se souvenir · Chronologie collective</p>
-			<h1 class="mt-4 font-display text-4xl text-ink sm:text-6xl">Notre ciel, au fil des soirées.</h1>
-			<p class="mt-5 max-w-2xl text-base leading-relaxed text-muted">
-				Une mémoire commune des parties classées Flex jouées à cinq. Les matchs incomplets restent consultables à part et ne changent jamais les statistiques collectives.
-			</p>
-			<p class="mt-5 font-display text-lg text-gold-200">
-				{pluralize(filteredMatchCount, 'match')} dans {pluralize(sessions.length, 'soirée')}
-				{selectedYear !== 'all' && ` · ${selectedYear}`}
-			</p>
+	<main class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-10 px-4 py-12 sm:px-8 sm:py-16">
+		<header class="flex flex-wrap items-end justify-between gap-6">
+			<div>
+				<p class="label-caps text-hextech-300">Se souvenir · Chronologie</p>
+				<h1 class="mt-3 font-display text-4xl text-ink sm:text-5xl">Notre ciel, au fil des soirées.</h1>
+			</div>
+			{years.length > 1 && <SegmentedNav label="Période" options={yearOptions} />}
 		</header>
 
-		<form method="get" class="flex flex-wrap items-end gap-3 border-y border-white/10 py-4">
-			<label for="year-filter" class="label-caps text-muted">Période</label>
-			<select id="year-filter" name="year" class="focus-ring min-h-10 border border-white/15 bg-night-900 px-3 text-sm text-ink">
-				<option value="all" selected={selectedYear === 'all'}>Toutes les années</option>
-				{years.map((year) => <option value={year} selected={selectedYear === year}>{year}</option>)}
-			</select>
-			<button class="focus-ring min-h-10 border border-sky-300/40 px-4 text-sm text-sky-300 transition-colors hover:bg-sky-300/10" type="submit">Explorer</button>
-		</form>
+		<Panel as="section" aria-label="Repères de la période" class="p-5 sm:p-6">
+			<div class="grid gap-6 lg:grid-cols-[auto_minmax(0,1fr)] lg:items-center lg:gap-10">
+			<dl class="grid grid-cols-3 gap-6 sm:gap-10">
+				<div>
+					<dt class="label-caps text-[0.65rem] text-muted">Soirées</dt>
+					<dd class="mt-1 font-display text-3xl tabular-nums text-ink">{sessions.length}</dd>
+				</div>
+				<div>
+					<dt class="label-caps text-[0.65rem] text-muted">Parties</dt>
+					<dd class="mt-1 font-display text-3xl tabular-nums text-ink">{matchCount}</dd>
+				</div>
+				<div>
+					<dt class="label-caps text-[0.65rem] text-muted">Bilan</dt>
+					<dd class="mt-1 font-display text-3xl tabular-nums text-gold-200"
+						data-tip-title={`${winCount} V – ${matchCount - winCount} D`}
+						data-tip={matchCount >= MIN_DRAFT_GAMES ? `${formatPercent(winCount / matchCount)} de victoires` : undefined}>
+						{winCount}<span class="text-lg text-muted"> – {matchCount - winCount}</span>
+					</dd>
+					{matchCount > 0 && (
+						<div aria-hidden="true" class="mt-2 flex h-1 w-full overflow-hidden bg-grey-700/70">
+							<span class="block h-full origin-left animate-grow-x bg-gold-200 motion-reduce:animate-none" style={`width: ${(winCount / matchCount) * 100}%`}></span>
+						</div>
+					)}
+				</div>
+			</dl>
+			<div class="min-w-0">
+				<p class="label-caps text-[0.65rem] text-muted">Picks de la période</p>
+				{mostPlayed.length > 0 ? (
+					<ul class="mt-3 flex flex-wrap gap-x-4 gap-y-3">
+						{mostPlayed.map((record) => (
+							<li><ChampionTile {...record} context="À cinq" /></li>
+						))}
+					</ul>
+				) : <p class="mt-2 text-sm text-muted">En attente de la première soirée à cinq.</p>}
+			</div>
+			</div>
+		</Panel>
 
 		<SessionConstellation sessions={sessions} />
 
-		<section aria-labelledby="partial-heading" class="border-t border-dashed border-white/15 pt-8">
-			<p class="label-caps text-muted">Archives à part</p>
-			<h2 id="partial-heading" class="mt-2 font-display text-2xl text-ink">Parties incomplètes</h2>
-			<p class="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
-				{partialMatches.length > 0
-					? `${partialMatches.length} ${partialMatches.length === 1 ? 'match a réuni' : 'matchs ont réuni'} deux à quatre Étoiles. Ils ne sont utilisés dans aucun bilan collectif ni profil d’équipe.`
-					: 'Aucun match incomplet n’est enregistré pour le moment.'}
-			</p>
-			{partialMatches.length > 0 && (
+		{partialMatches.length > 0 && (
+			<details class="group border-t border-dashed border-white/15 pt-6">
+				<summary class="focus-ring flex cursor-pointer list-none items-center gap-3 [&::-webkit-details-marker]:hidden">
+					<span aria-hidden="true" class="size-2 rotate-45 border-t border-r border-gold-500 transition-transform group-open:rotate-135"></span>
+					<h2 class="font-display text-xl text-ink">Parties incomplètes</h2>
+					<span class="text-sm tabular-nums text-muted" data-tip-title="Hors bilans collectifs" data-tip="De deux à quatre Étoiles : consultables ici, jamais comptées dans les statistiques à cinq.">{partialMatches.length}</span>
+				</summary>
 				<ol class="mt-5 divide-y divide-white/8 border border-dashed border-white/10 bg-night-900/35">
 					{partialMatches.map((match) => <li><MatchRow match={match} permalinkOnly /></li>)}
 				</ol>
-			)}
-		</section>
+			</details>
+		)}
 
-		{sessions.length > 0 && (
+		{allSessions.length > 0 && (
 			<p class="text-xs text-muted">
-				Première soirée archivée : {formatDate(allSessions.at(-1)!.startedAt)}. Les regroupements utilisent une pause de quatre heures comme séparation de session.
+				Première soirée archivée : {formatDate(allSessions.at(-1)!.startedAt)} · une pause de quatre heures sépare deux soirées.
 			</p>
 		)}
 	</main>

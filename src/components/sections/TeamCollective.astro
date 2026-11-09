@@ -1,10 +1,7 @@
 ---
 import DraftObservations from '../collective/DraftObservations.astro';
 import Panel from '../ui/Panel.astro';
-import MeterBar from '../ui/MeterBar.astro';
 import SectionHeading from '../ui/SectionHeading.astro';
-import { formatPercent, pluralize } from '../../lib/format';
-import { MIN_DRAFT_GAMES } from '../../lib/stats';
 import type { Position } from '../../lib/types';
 import type { TeamCollective } from '../../lib/stats';
 
@@ -32,37 +29,6 @@ const { collective, associationRoles } = Astro.props;
 					observations={collective.compositions} pending={collective.pendingCompositions}
 					baseline={collective.winRate} minimumGames={collective.minimumGames} composition />
 			</div>
-			{collective.patches.length > 0 && (
-				<section aria-labelledby="patch-history-title" class="mt-12 border-t border-white/10 pt-8">
-					<SectionHeading id="patch-history-title" eyebrow="Repères de jeu" title="Le collectif au fil des patchs" />
-					<p class="mb-5 max-w-2xl text-sm leading-relaxed text-muted">
-						Chaque partie conserve le patch de sa version Match-V5. Les périodes suivent l’ordre de sortie; aucun patch n’est reclassé selon son taux de victoire.
-					</p>
-					<ol class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-						{collective.patches.map((item) => (
-							<li class="border border-white/10 bg-night-900/45 p-4">
-								<div class="flex items-baseline justify-between gap-3">
-									<h3 class="font-display text-xl text-ink">Patch {item.patch}</h3>
-									<span class="text-xs text-muted">{pluralize(item.games, 'match')}</span>
-								</div>
-								{item.games >= MIN_DRAFT_GAMES ? (
-									<>
-										<div class="mt-4 flex items-baseline justify-between gap-3 text-xs text-muted">
-											<span>{item.wins} victoires</span>
-											<span class="font-semibold tabular-nums text-gold-200">{formatPercent(item.winRate)}</span>
-										</div>
-										<MeterBar ratio={item.winRate} tone="win" class="mt-2" />
-									</>
-								) : (
-									<p class="mt-4 border-t border-white/8 pt-3 text-xs leading-relaxed text-muted">
-										{item.wins} victoire{item.wins === 1 ? '' : 's'} sur {item.games} · tendance exploratoire, échantillon inférieur à {MIN_DRAFT_GAMES}.
-									</p>
-								)}
-							</li>
-						))}
-					</ol>
-				</section>
-			)}
 		</>
 	)}
 </section>

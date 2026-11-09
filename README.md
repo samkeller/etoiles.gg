@@ -17,10 +17,10 @@ SQLite et propose plusieurs parcours reliés :
 
 | Route | Parcours |
 | --- | --- |
-| `/` | Accueil éditorial, dernière soirée, forme collective, cinq profils et observations de draft |
-| `/history` | Chronologie des soirées à cinq, filtre par année civile et archives séparées des matchs incomplets |
-| `/players/{puuid}` | Historique Solo/Duo et Flex, pool personnel, rang et snapshots; aucun classement entre joueurs |
-| `/draft` | Composer une idée à cinq, explorer les pools et consulter les compositions/associations observées |
+| `/` | Accueil éditorial, dernière soirée, forme collective, cinq profils et accès aux parcours |
+| `/history` | Repères collectifs par année, picks marquants, chronologie des soirées et archives partielles séparées |
+| `/players/{puuid}` | Statistiques du joueur dans les matchs à cinq, champions, présences par match; rang personnel secondaire |
+| `/draft` | Table de draft à cinq sièges fixes : picks en un clic, historique et synergies observées à cinq, compositions jouées, bans habituels; état partageable via `?picks=` |
 | `/matches/{id}` | URL permanente du récit de match : résultat, patch, composition, statistiques, objectifs et lien externe |
 
 **Périmètres inviolables :** les statistiques collectives et les compositions observées
@@ -58,11 +58,12 @@ des volumes descriptifs, jamais une synergie ni une recommandation. Les filtres 
 recalculent l'échantillon sur les rôles observés dans les matchs, sans toucher au bilan
 collectif.
 
-Le laboratoire distingue les données de pool personnel (Solo/Duo et Flex classés)
-des observations d'équipe (Flex complet à cinq). Les picks personnels peu joués restent
-des pistes d'exploration. Les associations et compositions affichent leur effectif et
-ne suggèrent pas de causalité. Le détail rapide du match reste disponible sur l'accueil;
-le lien adjacent ouvre son URL permanente.
+La table de draft place chaque joueur sur son rôle principal observé à cinq. Un à cinq
+picks suffisent : le verdict ne compte que les parties Flex à cinq où ces joueurs ont joué
+ces champions, puis détaille les paires déjà réunies. Les « pistes perso » viennent du
+Solo/Duo ou du Flex individuel et sont présentées comme exploratoires. L'URL
+`/draft?picks=A,B,,D,` suit l'ordre Top, Jungle, Mid, ADC, Support. Les échantillons de
+moins de cinq restent des volumes descriptifs, jamais une recommandation.
 
 Les soirées sont regroupées par une pause de quatre heures et datées selon le fuseau
 Europe/Paris. Le filtre de période utilise l'année civile; il ne prétend pas reconstituer
@@ -82,34 +83,40 @@ fabriqué à partir d'un Match-V5.
 | `npm run build` | Construit le site de production |
 | `npm start` | Démarre le serveur Node de production et le planificateur opt-in |
 | `npm run preview` | Prévisualise le build |
-| `npm run ingest` | Synchronise les matchs Flex, le Solo/Duo récent et les rangs du jour |
-| `npm run ingest -- --backfill` | Récupère les historiques classés disponibles depuis la fenêtre Match-V5, en respectant les limites Riot |
+| `npm run ingest` | Synchronise les nouveautés Flex, Solo/Duo et les rangs du jour |
+| `npm run ingest:backfill` | Commence ou reprend le backfill historique classé par lots |
+| `npm run ingest:status` | Affiche la file en attente et l’avancement des curseurs de backfill |
 | `npm run resolvePuids -- "Pseudo#TAG"` | Résout le PUUID d'un joueur via son Riot ID et l'enregistre en base |
 | `npm run syncAssets` | Télécharge les icônes de profil et de champions (Data Dragon) et génère les noms FR des champions |
 
 ## Fiabilité de la synchronisation
 
-L'ingestion pagine les listes Riot par tranches de 100 IDs, y compris en incrémental.
-Les IDs à traiter sont conservés dans `ingest_pending`. Un curseur par joueur (`ingest_cursors`)
-et un curseur Solo/Duo séparé (`individual_ingest_cursors`) avec chevauchement de 24 heures
-couvrent les matchs encore en cours ou indexés tardivement ; un échec de collecte n'avance
-pas le curseur. Le tout premier run incrémental ne remonte qu'à 24 heures pour le Solo/Duo.
-Utiliser explicitement `--backfill` pour demander les pages plus anciennes; le backfill
-reste reprenable et peut être long.
-Chaque match et ses participants sont écrits dans une transaction.
+L'ingestion incrémentale utilise une fenêtre initiale de 24 heures puis un chevauchement de
+24 heures sur ses curseurs Flex (`ingest_cursors`) et Solo/Duo (`individual_ingest_cursors`).
+Le backfill explicite possède des curseurs de page indépendants pour chaque joueur et file;
+chaque page de 100 IDs et son curseur sont enregistrés ensemble dans une transaction.
+Chaque exécution backfill lit au plus deux pages par joueur/file et traite au plus 100
+détails de match. Relancer `npm run ingest:backfill` reprend à la page persistée, sans
+recommencer les pages terminées. `npm run ingest:status` permet de voir les files terminées,
+celles restant à parcourir et les détails encore en attente. Le backfill est fini quand les
+curseurs Flex et Solo/Duo sont terminés et qu'aucun match n'attend de détail.
+
+Les IDs à traiter restent dans `ingest_pending`; chaque match et ses participants sont
+écrits dans une transaction. Une erreur laisse l'ID en file, enregistre son nombre de
+tentatives et applique un délai progressif avant réessai. Les délais Riot trop longs
+respectent aussi un backoff renforcé. Les échecs restent visibles dans les logs et un run
+comportant des erreurs est enregistré `failed`; une interruption ne détruit ni les IDs ni
+les curseurs déjà persistés.
 Les anciens matchs dont les participants sont incomplets sont aussi remis en file :
 une réparation échouée conserve les données existantes et l'ID à reprendre.
-Les échecs restent repris au prochain run ; un run comportant des erreurs est enregistré
-`failed` et la CLI quitte avec un code non nul.
 
-Le client HTTP utilise un timeout de 10 secondes et au plus trois retries pour les erreurs
-réseau, 429 et 5xx. Pour les appels Riot de collecte et de résolution des joueurs, il
+Le client HTTP utilise un timeout de 30 secondes pour les appels Riot de collecte et de
+rangs, et au plus trois retries pour les erreurs réseau, 429 et 5xx. Pour les appels Riot, il
 respecte `Retry-After` jusqu'à cinq minutes par attente ; un backfill peut donc prendre
 du temps. Si cette limite ou le nombre de
 retries est dépassé sur un 429, le run s'arrête en échec sans multiplier les appels :
-les IDs déjà collectés restent en attente et les curseurs des collectes inachevées ne
-sont pas avancés. Relancer `npm run ingest -- --backfill` une fois la limite Riot
-expirée pour reprendre aussi les collectes inachevées. La clé Riot et les IDs sont
+les IDs et pages déjà collectés restent persistés. Relancer `npm run ingest:backfill`
+après la pause indiquée par `npm run ingest:status` reprend la collecte. La clé Riot et les IDs sont
 validés avant les appels. Les assets sont vérifiés avant écriture (réponse HTTP et
 signature PNG), remplacés atomiquement, et une
 synchronisation partielle ne se présente pas comme une réussite.
@@ -128,8 +135,10 @@ La base SQLite est stockée dans `./etoiles.db` par défaut (chemin configurable
 `DATABASE_PATH`), fichier ignoré par Git.
 
 Le schéma SQL de base est défini dans `src/lib/db/schema.ts`; les évolutions additives,
-versionnées et transactionnelles sont dans `src/lib/db/migrations.ts`. La migration V2
-ajoute les curseurs Solo/Duo et snapshots de rang sans supprimer les données existantes.
+versionnées et transactionnelles sont dans `src/lib/db/migrations.ts`. Les migrations V1
+à V3 ajoutent les curseurs Solo/Duo, snapshots de rang et curseurs de backfill reprenables
+sans supprimer les données existantes. V3 complète aussi les colonnes de reprise des bases
+déjà marquées V2 lorsque ces colonnes sont absentes.
 Un snapshot par joueur, file et jour UTC est écrit lors de l'ingestion; les rangs absents
 sont conservés comme « non classé », et aucun historique antérieur n'est inventé.
 
@@ -187,11 +196,14 @@ npm run resolvePuids -- "Pseudo#TAG"
 Puis effectuer le backfill initial :
 
 ```sh
-npm run ingest -- --backfill
+npm run ingest:backfill
+npm run ingest:status
 ```
 
-Vérifier les logs, un code de sortie nul, les vrais matchs sur `/` et une réussite
-dans `/api/sync.json`. Pour relancer manuellement une collecte incrémentale :
+Le backfill fonctionne par lots bornés. Relancer `npm run ingest:backfill` pour les lots
+suivants; `npm run ingest:status` indique si des pages ou détails restent à traiter.
+Vérifier ensuite les vrais matchs sur `/` et le résultat dans `/api/sync.json`. Pour relancer
+manuellement une collecte incrémentale :
 
 ```sh
 npm run ingest

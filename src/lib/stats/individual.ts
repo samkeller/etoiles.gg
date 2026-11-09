@@ -11,6 +11,8 @@ export interface RankedMatch {
 	id: string;
 	startedAt: number;
 	queue: RankedQueue;
+	/** Number of tracked Étoiles on this player's side in the match. */
+	teamSize: number;
 	patch: string;
 	champion: string;
 	role: Position | null;
@@ -30,7 +32,6 @@ export interface RankSnapshot {
 }
 
 export interface IndividualChampionRecord extends ChampionRecord {
-	lastPlayedAt: number;
 	roles: RoleShare[];
 }
 
@@ -165,10 +166,14 @@ export function getIndividualProfiles(database: Database.Database): IndividualPr
 			if (!tracked.has(participant.puuid)) continue;
 			const target = games.get(participant.puuid);
 			if (!target) continue;
+			const teamSize = info.participants.filter((candidate) =>
+				tracked.has(candidate.puuid) && candidate.teamId === participant.teamId,
+			).length;
 			target[queue].push({
 				id: match.id,
 				startedAt: match.startedAt,
 				queue,
+				teamSize,
 				patch: info.gameVersion.split('.').slice(0, 2).join('.'),
 				champion: championId(participant.championName),
 				role: isPosition(participant.individualPosition) ? participant.individualPosition : null,

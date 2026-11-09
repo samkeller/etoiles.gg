@@ -1,0 +1,88 @@
+---
+/**
+ * Bulle d'information unique pour tout le site : n'importe quel élément portant
+ * `data-tip` (et éventuellement `data-tip-title`) l'affiche au survol ou au focus.
+ * Les retours à la ligne du texte sont conservés. Fonctionne aussi pour le DOM
+ * généré côté client (délégation d'événements).
+ */
+---
+
+<div
+	id="tooltip-layer"
+	role="tooltip"
+	popover="manual"
+	class="pointer-events-none fixed inset-auto top-0 left-0 z-50 m-0 max-w-72 border border-gold-300/45 bg-night-900/96 px-3 py-2 text-xs leading-relaxed text-ink opacity-0 shadow-panel backdrop-blur-md transition-opacity duration-150 data-open:opacity-100 motion-reduce:transition-none"
+>
+	<p data-tip-heading class="font-display text-sm font-semibold text-gold-100 empty:hidden"></p>
+	<p data-tip-body class="whitespace-pre-line text-muted empty:hidden"></p>
+</div>
+
+<script>
+	const layer = document.getElementById('tooltip-layer');
+	const heading = layer?.querySelector<HTMLElement>('[data-tip-heading]');
+	const body = layer?.querySelector<HTMLElement>('[data-tip-body]');
+
+	if (layer && heading && body) {
+		const margin = 8;
+		const supportsPopover = typeof layer.showPopover === 'function';
+		let current: HTMLElement | null = null;
+		if (!supportsPopover) layer.style.display = 'none';
+
+		const setOpen = (open: boolean) => {
+			if (supportsPopover) {
+				if (open !== layer.matches(':popover-open')) {
+					if (open) layer.showPopover();
+					else layer.hidePopover();
+				}
+			} else {
+				layer.style.display = open ? 'block' : 'none';
+			}
+		};
+
+		const place = (target: HTMLElement) => {
+			const anchor = target.getBoundingClientRect();
+			const { width, height } = layer.getBoundingClientRect();
+			let top = anchor.top - height - margin;
+			if (top < margin) top = anchor.bottom + margin;
+			const left = Math.min(Math.max(anchor.left + anchor.width / 2 - width / 2, margin), window.innerWidth - width - margin);
+			layer.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`;
+		};
+
+		const hide = () => {
+			if (current?.getAttribute('aria-describedby') === layer.id) current.removeAttribute('aria-describedby');
+			current = null;
+			delete layer.dataset.open;
+			setOpen(false);
+		};
+
+		const show = (target: HTMLElement) => {
+			const title = target.dataset.tipTitle ?? '';
+			const text = target.dataset.tip ?? '';
+			if (!title && !text) return hide();
+			if (current && current !== target) hide();
+			current = target;
+			heading.textContent = title;
+			body.textContent = text;
+			setOpen(true);
+			place(target);
+			layer.dataset.open = '';
+			if (!target.hasAttribute('aria-describedby')) target.setAttribute('aria-describedby', layer.id);
+		};
+
+		const sync = (event: Event) => {
+			const target = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-tip], [data-tip-title]') : null;
+			if (target === current) return;
+			if (target) show(target);
+			else hide();
+		};
+
+		document.addEventListener('pointerover', sync);
+		document.addEventListener('focusin', sync);
+		document.addEventListener('focusout', hide);
+		document.documentElement.addEventListener('pointerleave', hide);
+		window.addEventListener('scroll', hide, { passive: true, capture: true });
+		document.addEventListener('keydown', (event) => {
+			if (event.key === 'Escape') hide();
+		});
+	}
+</script>

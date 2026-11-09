@@ -1,7 +1,7 @@
 ---
 import Avatar from '../ui/Avatar.astro';
 import ChampionIcon from '../ui/ChampionIcon.astro';
-import MeterBar from '../ui/MeterBar.astro';
+import ChampionTile from '../ui/ChampionTile.astro';
 import Panel from '../ui/Panel.astro';
 import RoleIcon from '../ui/RoleIcon.astro';
 import Sparkline from '../ui/Sparkline.astro';
@@ -35,8 +35,8 @@ const percent = (value: number | null) => (value === null ? '—' : formatPercen
 		<h3 class="mt-4 font-display text-xl font-bold text-ink">{player.name}</h3>
 		{player.tagLine && <p class="text-xs text-muted">#{player.tagLine}</p>}
 	</header>
-	<a href={`/players/${player.puuid}`} class="focus-ring mt-4 inline-flex items-center justify-center gap-2 border-y border-white/10 py-2 text-xs text-muted transition-colors hover:text-ink">
-		Parcours personnel <span aria-hidden="true">↗</span>
+	<a href={`/players/${player.puuid}`} class="focus-ring mt-4 inline-flex min-h-10 items-center justify-center gap-2 border border-sky-300/25 bg-sky-300/5 px-3 text-xs font-medium text-sky-200 transition-colors hover:border-sky-300/55 hover:bg-sky-300/10 hover:text-ink">
+		Voir ses parties à cinq <span aria-hidden="true">↗</span>
 	</a>
 
 	{
@@ -44,19 +44,10 @@ const percent = (value: number | null) => (value === null ? '—' : formatPercen
 			<p class="mt-6 text-center text-sm text-muted">Pas encore de match joué à cinq.</p>
 		) : (
 			<>
-				<section class="mt-6" aria-label="Champions les plus joués">
-					<ul class="grid grid-cols-3 gap-3">
+				<section class="mt-6" aria-label="Champions les plus joués à cinq">
+					<ul class="flex justify-center gap-5">
 						{signature.map((record) => (
-							<li class="flex flex-col items-center gap-1.5">
-								<ChampionIcon champion={record.champion} size="lg" />
-								<span class="text-[0.6875rem] tabular-nums text-muted">
-									<span class="font-semibold text-ink">{record.games}</span> · {formatPercent(record.wins / record.games)}
-								</span>
-								<MeterBar ratio={record.wins / record.games} tone="win" class="w-full" />
-								<span class="sr-only">
-									{championName(record.champion)} : {record.games} matchs, {record.wins} victoires
-								</span>
-							</li>
+							<li><ChampionTile {...record} size="lg" context="À cinq" /></li>
 						))}
 					</ul>
 				</section>

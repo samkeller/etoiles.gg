@@ -1,0 +1,21 @@
+---
+import type { RankedQueue } from '../../lib/stats';
+
+interface Props {
+	queue: RankedQueue;
+	class?: string;
+}
+
+const { queue, class: className } = Astro.props;
+---
+
+<span
+	data-tip={queue === 'soloDuo' ? 'Classée Solo/Duo' : 'Classée Flex'}
+	class:list={[
+		'inline-flex h-5 shrink-0 items-center border px-1.5 text-[0.6rem] font-semibold tracking-[0.12em] uppercase',
+		queue === 'soloDuo' ? 'border-hextech-300/35 text-hextech-300' : 'border-gold-300/40 text-gold-200',
+		className,
+	]}
+>
+	{queue === 'soloDuo' ? 'Solo' : 'Flex'}
+</span>

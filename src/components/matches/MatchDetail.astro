@@ -13,6 +13,7 @@ import {
 import type { MatchDetail, MatchTeamObjectives } from "../../lib/stats";
 import UiIcon from "../ui/UiIcon.astro";
 import SummonerSpell from '../ui/SummonerSpell.astro';
+import StarPresence from '../ui/StarPresence.astro';
 
 interface Props {
 	detail: MatchDetail;
@@ -70,14 +71,9 @@ const objectives: {
 		class="flex flex-col gap-3 pr-10 sm:flex-row sm:items-end sm:justify-between"
 	>
 		<div>
-			<p class="label-caps text-muted">
-				{
-					detail.queueId === 420
-						? 'Classé Solo/Duo'
-						: detail.lineupSize === 5
-							? "Flex · cinq Étoiles"
-							: `Flex · ${detail.lineupSize}/5 Étoiles`
-				}
+			<p class="label-caps flex items-center gap-2 text-muted">
+				{detail.queueId === 420 ? 'Classé Solo/Duo' : 'Flex'}
+				<StarPresence count={detail.lineupSize} size="md" />
 			</p>
 			<h2
 				id={titleId}

@@ -49,8 +49,8 @@ describe('getPlayers', () => {
 			csPerMinute: 300 / 50,
 			visionPerMinute: 30 / 50,
 			champions: [
-				{ champion: 'Jax', games: 1, wins: 1 },
-				{ champion: 'Garen', games: 1, wins: 0 },
+				{ champion: 'Jax', games: 1, wins: 1, lastPlayedAt: 1, kda: 4 },
+				{ champion: 'Garen', games: 1, wins: 0, lastPlayedAt: 2, kda: 1 },
 			],
 			progression: [],
 			recentKillParticipation: null,

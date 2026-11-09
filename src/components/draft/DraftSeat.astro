@@ -1,0 +1,110 @@
+---
+import Avatar from '../ui/Avatar.astro';
+import ChampionIcon from '../ui/ChampionIcon.astro';
+import { recordTip } from '../../lib/format';
+import { championName, profileIcon, roleIcon, roleLabel } from '../../lib/lol';
+import type { ChampionRecord, TeamChampionRecord } from '../../lib/stats';
+import type { Position } from '../../lib/types';
+
+interface Props {
+	index: number;
+	puuid: string;
+	name: string;
+	role: Position | null;
+	pool: readonly TeamChampionRecord[];
+	explore: readonly ChampionRecord[];
+	minimumGames: number;
+}
+
+const { index, puuid, name, role, pool, explore, minimumGames } = Astro.props;
+const VISIBLE = 8;
+const pickButton = 'focus-ring group relative grid place-items-center outline-offset-2 transition-transform duration-200 hover:-translate-y-0.5 aria-pressed:-translate-y-0.5 motion-reduce:transition-none';
+---
+
+<article data-seat={index} aria-labelledby={`seat-${index}-name`}
+	class="flex min-w-0 flex-col border border-white/10 bg-night-900/60 transition-colors duration-300 data-filled:border-gold-300/50">
+	<header class="flex items-center gap-3 border-b border-white/10 px-3 py-2.5">
+		<img src={roleIcon(role)} alt="" width="34" height="34" class="size-6 object-contain" data-tip-title={roleLabel(role)} />
+		<div class="min-w-0 flex-1 leading-tight">
+			<p class="label-caps text-[0.6rem] text-gold-200">{roleLabel(role)}</p>
+			<a id={`seat-${index}-name`} href={`/players/${puuid}`} class="focus-ring block truncate text-sm text-ink hover:text-gold-100">{name}</a>
+		</div>
+		<Avatar src={profileIcon(puuid)} class="size-8" />
+	</header>
+
+	<div class="relative grid min-h-36 place-items-center px-3 py-4">
+		<div data-slot-empty={index} class="flex flex-col items-center gap-2 text-center">
+			<span class="grid size-20 place-items-center border border-dashed border-gold-500/70 bg-night-950/60">
+				<svg aria-hidden="true" viewBox="0 0 24 24" class="size-6 animate-twinkle text-gold-300 motion-reduce:animate-none">
+					<path d="M12 2.5 14.4 9l6.9.4-5.3 4.4 1.7 6.7L12 16.8l-5.7 3.7 1.7-6.7-5.3-4.4L9.6 9Z" fill="currentColor" />
+				</svg>
+			</span>
+			<span class="text-xs text-muted">À choisir</span>
+		</div>
+		<div data-slot-filled={index} hidden aria-live="polite" class="flex flex-col items-center gap-1.5 text-center">
+			<span data-slot-icon class="relative grid size-20 place-items-center overflow-hidden border border-gold-200 bg-night-800 font-display text-base font-bold text-muted shadow-glow-gold"></span>
+			<span data-slot-name class="mt-1 font-display text-sm text-ink"></span>
+			<span data-slot-record class="text-xs tabular-nums text-muted"></span>
+		</div>
+		<button type="button" data-clear={index} hidden aria-label={`Retirer le pick de ${name}`}
+			class="focus-ring absolute top-2 right-2 grid size-7 place-items-center border border-white/10 text-muted transition-colors hover:border-white/30 hover:text-ink">
+			<span aria-hidden="true">✕</span>
+		</button>
+	</div>
+
+	<div class="flex flex-1 flex-col gap-4 border-t border-white/10 p-3">
+		<div>
+			<p class="label-caps mb-2 text-[0.6rem] text-muted" data-tip={`Champions joués par ${name} dans nos Flex à cinq`}>À cinq · {pool.length}</p>
+			{pool.length === 0 ? <p class="text-xs text-muted">Aucun pick à cinq.</p> : (
+				<ul class="grid grid-cols-[repeat(auto-fill,minmax(2.75rem,1fr))] gap-x-2 gap-y-3">
+					{pool.map((record, position) => (
+						<li hidden={position >= VISIBLE} data-overflow={position >= VISIBLE ? '' : undefined}>
+							<button type="button" class={pickButton} aria-pressed="false"
+								data-pick-seat={index} data-pick-champion={record.champion}
+								data-tip-title={championName(record.champion)}
+								data-tip={`À cinq\n${recordTip(record, minimumGames)}`}>
+								<ChampionIcon champion={record.champion} size="md" tip={false} class="group-aria-pressed:border-gold-100 group-aria-pressed:shadow-glow-gold" />
+								<span aria-hidden="true" class="absolute -right-1 -bottom-1 min-w-4 border border-gold-300/60 bg-night-950 px-0.5 text-center text-[0.6rem] leading-3.5 font-bold tabular-nums text-gold-100">{record.games}</span>
+								<span class="sr-only">{championName(record.champion)}, {record.games} parties à cinq</span>
+							</button>
+						</li>
+					))}
+				</ul>
+			)}
+			{pool.length > VISIBLE && (
+				<button type="button" data-expand={index} aria-expanded="false"
+					class="focus-ring mt-2 text-xs text-hextech-300 underline decoration-hextech-300/30 underline-offset-4 hover:decoration-hextech-300">
+					+ {pool.length - VISIBLE} {pool.length - VISIBLE === 1 ? 'autre' : 'autres'}
+				</button>
+			)}
+		</div>
+
+		{explore.length > 0 && (
+			<div>
+				<p class="label-caps mb-2 inline-flex items-center gap-1.5 text-[0.6rem] text-hextech-300"
+					data-tip-title="Pistes perso" data-tip="Joués en classé sans le groupe complet, jamais à cinq. Une idée à tester, pas une recommandation.">
+					Pistes perso <span aria-hidden="true">✧</span>
+				</p>
+				<ul class="grid grid-cols-[repeat(auto-fill,minmax(2.75rem,1fr))] gap-x-2 gap-y-3">
+					{explore.map((record) => (
+						<li>
+							<button type="button" class={pickButton} aria-pressed="false"
+								data-pick-seat={index} data-pick-champion={record.champion}
+								data-tip-title={championName(record.champion)}
+								data-tip={`Piste exploratoire · jamais joué à cinq\nEn classé perso : ${recordTip(record, minimumGames)}`}>
+								<ChampionIcon champion={record.champion} size="md" tip={false} class="border-dashed border-hextech-300/50 opacity-75 group-hover:opacity-100 group-aria-pressed:border-hextech-300 group-aria-pressed:opacity-100" />
+								<span class="sr-only">{championName(record.champion)}, piste exploratoire</span>
+							</button>
+						</li>
+					))}
+				</ul>
+			</div>
+		)}
+
+		<label class="mt-auto block">
+			<span class="sr-only">Autre champion pour {name}</span>
+			<input data-seat-input={index} list="champion-catalog" autocomplete="off" placeholder="Autre champion…"
+				class="focus-ring h-9 w-full border border-white/12 bg-night-950/70 px-2.5 text-sm text-ink placeholder:text-grey-700 focus:border-hextech-300/60 aria-invalid:border-loss" />
+		</label>
+	</div>
+</article>

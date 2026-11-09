@@ -1,0 +1,36 @@
+---
+import { formatDate, pluralize } from '../../lib/format';
+import { rankEmblem, tierLabel } from '../../lib/lol';
+import type { RankSnapshot } from '../../lib/stats';
+
+interface Props {
+	/** « Solo/Duo » ou « Flex ». */
+	queue: string;
+	rank: RankSnapshot | null;
+	size?: 'sm' | 'md' | 'lg';
+	class?: string;
+}
+
+const { queue, rank, size = 'md', class: className } = Astro.props;
+const sizes = { sm: 'size-8', md: 'size-14', lg: 'size-20' };
+const emblem = rank?.tier ? rankEmblem(rank.tier) : null;
+const label = rank?.tier ? tierLabel(rank.tier, rank.division) : rank ? 'Non classé' : 'Rang non relevé';
+const details = [
+	rank?.tier && rank.leaguePoints !== null ? `${rank.leaguePoints} LP` : null,
+	rank?.wins !== null && rank?.wins !== undefined && rank.losses !== null
+		? `${pluralize(rank.wins + rank.losses, 'partie')} sur la saison (${rank.wins} V – ${rank.losses} D)`
+		: null,
+	rank ? `Relevé du ${formatDate(Date.parse(`${rank.capturedOn}T12:00:00Z`))}` : 'Aucun relevé de rang enregistré',
+].filter(Boolean).join('\n');
+---
+
+<span role="img" aria-label={`${queue} : ${label}`} data-tip-title={`${queue} · ${label}`} data-tip={details}
+	class:list={['relative inline-grid shrink-0 place-items-center overflow-hidden', sizes[size], className]}>
+	{emblem ? (
+		<img src={emblem} alt="" width="160" height="90" loading="lazy" decoding="async" class="size-full scale-[2.6] object-cover" />
+	) : (
+		<svg aria-hidden="true" viewBox="0 0 40 40" class="size-3/4 text-grey-700">
+			<path d="M20 4 33 11v12c0 7-6 11-13 13C13 34 7 30 7 23V11Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="3 3" />
+		</svg>
+	)}
+</span>

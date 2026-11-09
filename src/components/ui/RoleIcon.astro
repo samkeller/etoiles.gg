@@ -5,9 +5,11 @@ import type { Position } from '../../lib/types';
 interface Props {
 	role: Position | null;
 	class?: string;
+	/** Détail ajouté sous le nom du rôle dans la bulle. */
+	tip?: string;
 }
 
-const { role, class: className = 'size-4' } = Astro.props;
+const { role, class: className = 'size-4', tip } = Astro.props;
 ---
 
-<img src={roleIcon(role)} alt={roleLabel(role)} title={roleLabel(role)} width="34" height="34" class:list={['shrink-0 object-contain', className]} />
+<img src={roleIcon(role)} alt={roleLabel(role)} data-tip-title={roleLabel(role)} data-tip={tip} width="34" height="34" class:list={['shrink-0 object-contain', className]} />

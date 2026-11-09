@@ -47,6 +47,31 @@ export function compareRoles(left: Position | null, right: Position | null): num
 	return rank(left) - rank(right);
 }
 
+const TIER_LABELS: Record<string, string> = {
+	IRON: 'Fer',
+	BRONZE: 'Bronze',
+	SILVER: 'Argent',
+	GOLD: 'Or',
+	PLATINUM: 'Platine',
+	EMERALD: 'Émeraude',
+	DIAMOND: 'Diamant',
+	MASTER: 'Maître',
+	GRANDMASTER: 'Grand Maître',
+	CHALLENGER: 'Challenger',
+};
+
+/** Libellé français d'un rang Riot, division incluse quand elle a du sens. */
+export function tierLabel(tier: string, division?: string | null): string {
+	const label = TIER_LABELS[tier.toUpperCase()] ?? tier;
+	const apex = ['MASTER', 'GRANDMASTER', 'CHALLENGER'].includes(tier.toUpperCase());
+	return division && !apex ? `${label} ${division}` : label;
+}
+
+export function rankEmblem(tier: string): string | null {
+	const key = tier.toUpperCase();
+	return key in TIER_LABELS ? `/riot/ranks/emblem-${key.toLowerCase()}.png` : null;
+}
+
 export function profileIcon(puuid: string): string {
 	return `/riot/profiles/${puuid}.png`;
 }

@@ -24,6 +24,8 @@ export function addPlayer(database: Database.Database, puuid: string, gameName: 
 export interface FixtureMember {
 	puuid: string;
 	champion?: string;
+	/** Clé numérique Riot du champion, utile pour résoudre les bans. */
+	championKey?: number;
 	role?: Position;
 	kills?: number;
 	deaths?: number;
@@ -42,6 +44,8 @@ export interface FixtureMatch {
 	lineupSize?: number;
 	durationS?: number;
 	withRawJson?: boolean;
+	/** Clés numériques bannies par notre équipe (côté 100) ; omis = réponse sans bans. */
+	bans?: readonly number[];
 }
 
 const FILLER_ROLES: readonly Position[] = ['TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM', 'UTILITY'];
@@ -51,6 +55,7 @@ function participant(member: FixtureMember, teamId: TeamId, win: boolean): Parti
 		puuid: member.puuid,
 		teamId,
 		championName: member.champion ?? 'Aatrox',
+		...(member.championKey === undefined ? {} : { championId: member.championKey }),
 		champLevel: 16,
 		individualPosition: member.role ?? 'TOP',
 		kills: member.kills ?? 0,
@@ -96,7 +101,12 @@ export function addMatch(database: Database.Database, match: FixtureMatch): void
 				...enemies.map((member) => participant(member, 200, !match.won)),
 			],
 			teams: [
-				{ teamId: 100, win: match.won, objectives: objectives(match.won ? 3 : 1) },
+				{
+					teamId: 100,
+					win: match.won,
+					objectives: objectives(match.won ? 3 : 1),
+					...(match.bans ? { bans: match.bans.map((championId, index) => ({ championId, pickTurn: index + 1 })) } : {}),
+				},
 				{ teamId: 200, win: !match.won, objectives: objectives(match.won ? 1 : 3) },
 			],
 		},

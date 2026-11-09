@@ -22,6 +22,7 @@ export function parseRiotId(riotId: string): [string, string] {
 async function get(path: string): Promise<unknown> {
     return (await request(`https://europe.api.riotgames.com${path}`, {
         headers: riotHeaders(),
+        timeoutMs: 30_000,
         maxRetryAfterMs: 5 * 60_000,
     })).json();
 }
@@ -112,6 +113,7 @@ export async function getRankEntries(puuid: string): Promise<LeagueEntryDto[]> {
     }
     const response = await request(`https://${platform}.api.riotgames.com/lol/league/v4/entries/by-puuid/${encodeURIComponent(puuid)}`, {
         headers: riotHeaders(),
+        timeoutMs: 30_000,
         maxRetryAfterMs: 5 * 60_000,
     });
     return validateLeagueEntries(await response.json());

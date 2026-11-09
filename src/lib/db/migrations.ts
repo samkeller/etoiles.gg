@@ -2,7 +2,8 @@ import type Database from 'better-sqlite3';
 
 interface Migration {
 	version: number;
-	sql: string;
+	sql?: string;
+	apply?: (database: Database.Database) => void;
 }
 
 const migrations: readonly Migration[] = [
@@ -40,6 +41,46 @@ const migrations: readonly Migration[] = [
 				ON matches(queue_id, game_start_ts DESC);
 		`,
 	},
+	{
+		version: 2,
+		sql: `
+			ALTER TABLE ingest_pending ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0);
+			ALTER TABLE ingest_pending ADD COLUMN next_attempt_at INTEGER NOT NULL DEFAULT 0 CHECK (next_attempt_at >= 0);
+
+			CREATE TABLE ingest_backfill_cursors (
+				puuid TEXT NOT NULL REFERENCES players(puuid),
+				queue_id INTEGER NOT NULL CHECK (queue_id IN (420, 440)),
+				next_start INTEGER NOT NULL DEFAULT 0 CHECK (next_start >= 0),
+				is_complete INTEGER NOT NULL DEFAULT 0 CHECK (is_complete IN (0, 1)),
+				updated_at INTEGER NOT NULL,
+				PRIMARY KEY (puuid, queue_id)
+			);
+		`,
+	},
+	{
+		version: 3,
+		apply(database) {
+			const pendingColumns = new Set(
+				(database.pragma('table_info(ingest_pending)') as { name: string }[]).map((column) => column.name),
+			);
+			if (!pendingColumns.has('attempts')) {
+				database.exec('ALTER TABLE ingest_pending ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0)');
+			}
+			if (!pendingColumns.has('next_attempt_at')) {
+				database.exec('ALTER TABLE ingest_pending ADD COLUMN next_attempt_at INTEGER NOT NULL DEFAULT 0 CHECK (next_attempt_at >= 0)');
+			}
+			database.exec(`
+				CREATE TABLE IF NOT EXISTS ingest_backfill_cursors (
+					puuid TEXT NOT NULL REFERENCES players(puuid),
+					queue_id INTEGER NOT NULL CHECK (queue_id IN (420, 440)),
+					next_start INTEGER NOT NULL DEFAULT 0 CHECK (next_start >= 0),
+					is_complete INTEGER NOT NULL DEFAULT 0 CHECK (is_complete IN (0, 1)),
+					updated_at INTEGER NOT NULL,
+					PRIMARY KEY (puuid, queue_id)
+				)
+			`);
+		},
+	},
 ];
 
 export function migrateDatabase(database: Database.Database): void {
@@ -51,7 +92,8 @@ export function migrateDatabase(database: Database.Database): void {
 	for (const migration of migrations) {
 		if (migration.version <= currentVersion) continue;
 		const apply = database.transaction(() => {
-			database.exec(migration.sql);
+			if (migration.sql) database.exec(migration.sql);
+			migration.apply?.(database);
 			database.pragma(`user_version = ${migration.version}`);
 		});
 		apply();

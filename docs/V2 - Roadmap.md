@@ -1,10 +1,9 @@
 # etoiles.win V2 — réalisation et suite
 
-Dernière mise à jour : 8 novembre 2026
+Dernière mise à jour : 9 novembre 2026
 
-La V2 est livrée par tranches cohérentes. Les cases « socle livré » décrivent le code
-disponible; une collecte Riot réelle, une sauvegarde Railway et les fonctionnalités
-qui nécessitent un service externe ne sont pas déclarées terminées sans validation.
+La V2 avance par tranches cohérentes. Le code disponible, les collectes réellement
+validées et les fonctionnalités encore reportées sont distingués ci-dessous.
 
 ## Parcours livrés
 
@@ -12,85 +11,110 @@ qui nécessitent un service externe ne sont pas déclarées terminées sans vali
 
 - Palette céleste bleu nuit, bleu électrique et or doux; constellation discrète, surfaces
   éditoriales et typographie système sans police Riot.
-- Navigation partagée, responsive et persistante; mentions légales Riot conservées.
-- Accueil racontant la dernière soirée, la forme collective, les cinq profils, l'historique
-  et le collectif, à partir des données SQLite réelles.
-- Les données d'équipe continuent d'exiger une partie classée Flex jouée par les cinq.
+- Navigation principale réduite à Accueil, Mémoire et Draft; pas de mélange entre liens de
+  menu et ancres de sections.
+- Accueil racontant la dernière soirée et la forme collective; les cinq profils apparaissent
+  avant la constellation et l'historique.
+- Accès aux profils présenté comme un bouton cohérent avec les interactions du site.
+- Animation de FormStrip extraite en primitive générique et réutilisée sur les profils,
+  avec respect de `prefers-reduced-motion`.
+- Présentation des données par icônes : tuiles de champion avec volume (`ChampionTile`),
+  présence des Étoiles en pastilles (`StarPresence`) au lieu de « n/5 Étoiles », filtres de
+  rôles en icônes cliquables, emblèmes de rang et badges de file.
+- Tooltips génériques (`TooltipLayer`) : tout élément portant `data-tip` affiche un
+  bilan au survol ou au focus, y compris les éléments créés côté client.
+- La règle collective reste inchangée : match Flex queue 440 joué par les cinq.
 
 ### V2.1 — Données enrichies · socle livré, collecte réelle à valider
 
-- Migration SQLite V1 additive et transactionnelle; les tables, matchs, participants et
-  réponses `raw_json` existants sont conservés.
-- Collecte classée Solo/Duo (`queue 420`) avec curseurs indépendants; l'ingestion Flex
-  existante (`queue 440`) reste en place.
-- Les agrégats personnels lisent Solo/Duo et Flex séparément des matchs complets d'équipe.
-  Les files non classées ne sont pas demandées.
-- Lecture des entrées League-V4 et snapshots quotidiens par joueur/file, y compris un
-  snapshot explicite sans rang. Aucun rang historique n'est fabriqué.
-- Le patch est extrait de la version déjà persistée dans chaque Match-V5. Les périodes
-  actuelles sont des années civiles et non une reconstitution des saisons compétitives.
-- La collecte quotidienne de Solo/Duo commence avec un chevauchement de 24 heures si le
-  curseur est vide. Un backfill historique est explicite (`npm run ingest -- --backfill`),
-  paginé, reprenable et susceptible de durer selon les limites Riot.
+- Migrations SQLite V1 à V3 additives et transactionnelles; les matchs, participants et
+  réponses `raw_json` existants sont conservés. V3 répare aussi une base déjà marquée V2
+  si elle n'a pas les colonnes de reprise des détails.
+- Collecte classée Solo/Duo (`queue 420`) avec curseur distinct; collecte Flex (`queue 440`)
+  conservée. Aucun mode non classé n'est demandé.
+- Agrégats individuels distincts des bilans collectifs à cinq.
+- Lecture League-V4 et snapshots quotidiens par joueur/file; aucun rang antérieur n'est
+  fabriqué.
+- Backfill par lots : deux pages de 100 IDs au plus par joueur/file et au plus 100 détails
+  traités par exécution. Le curseur de page avance dans la même transaction que les IDs
+  mis en file.
+- `npm run ingest:status` expose les curseurs par joueur/file, les détails en attente et
+  leur prochaine reprise. Les erreurs individuelles sont reprises avec backoff exponentiel;
+  un seul match défaillant ne monopolise pas tous les lots suivants.
+- Les timeouts Riot sont de 30 secondes; les limites et `Retry-After` restent respectés.
+  La collecte réelle et la stabilité avec la clé et le volume de production restent à valider.
 
 ### V2.2 — Statistiques · première tranche livrée
 
-- Profils individuels par URL : volumes, taux avec effectif, champions, rôles, historique
-  classé récent et snapshots de rang; aucune comparaison entre les cinq joueurs.
-- Taux collectifs par patch avec ordre numérique et affichage prudent des échantillons
-  inférieurs à cinq parties.
-- Les données d'équipe, historiques et détails conservent leur périmètre queue 440 à cinq.
+- Les profils montrent d'abord les données du joueur dans les matchs à cinq : indicateurs
+  d'équipe et liste complète de ses champions, triable par fréquence ou winrate.
+- Sur desktop, les données à cinq et le parcours personnel sont côte à côte au lieu d'être
+  empilés après un long défilement; sur mobile, ils sont empilés.
+- Le tri par winrate privilégie les champions joués au moins cinq fois; les volumes sont
+  affichés avec les taux.
+- L'historique personnel récent indique aussi le nombre d'Étoiles présentes dans la partie.
+- Solo/Duo, Flex et rangs sont toujours consultables, mais dans une section secondaire.
+  Les emblèmes locaux sont utilisés pour les tiers connus.
 - Les insights multi-signaux, records enrichis et comparaisons temporelles avancées restent
   à développer; aucune phrase de causalité n'est générée.
+- Les taux collectifs par patch restent calculés, mais leur panneau d'accueil sans question
+  produit utile a été retiré.
 
-### V2.3 — Draft Lab · première version fonctionnelle
+### V2.3 — Draft · table unique livrée
 
-- Sélection de cinq joueurs, de cinq rôles distincts et de cinq champions différents.
-- Picks fréquents observés dans l'historique classé personnel proposés comme raccourcis,
-  jamais comme recommandations.
-- Comparaison d'une composition avec les matchs identiques à cinq; les bilans ne sont
-  affichés qu'à partir de cinq occurrences.
-- Associations calculées uniquement sur les Flex à cinq; les petits échantillons sont
-  décrits sans winrate.
-- Les bans, la comparaison côte à côte de plusieurs idées et la synergie théorique ne sont
-  pas implémentés.
+- Une seule table : les cinq joueurs sont fixes, chacun à son siège selon son rôle principal
+  déduit des matchs à cinq. Les anciennes sections « Explorer » et « Composer » sont fusionnées.
+- Chaque siège propose en un clic ses champions joués à cinq (volume et bilan en tooltip),
+  des pistes personnelles Solo/Duo/Flex jamais jouées à cinq, et un champ avec
+  autocomplétion pour tout autre champion.
+- Dès un pick, le verdict compare les parties à cinq qui réunissent ces champions sur ces
+  joueurs : historique observé, liens vers les matchs, synergie observée par paire et paires
+  jamais réunies. Sans historique, le pick est signalé comme suggestion exploratoire.
+- Les compositions déjà jouées se filtrent selon les picks et se rechargent en un clic.
+- Bans collectifs les plus fréquents affichés à côté de la table.
+- L'état est partageable dans l'URL (`/draft?picks=A,B,,D,`, dans l'ordre des sièges).
+- Les résultats ne consomment que les matchs Flex complets à cinq. Un échantillon inférieur
+  à cinq reste un décompte sans taux ni recommandation. Aucune synergie théorique n'est
+  présentée; comparaison côte à côte de plusieurs idées reportée.
 
 ### V2.4 — Mémoire · première version livrée
 
 - Chronologie des soirées de matchs complets; une pause de quatre heures sépare deux
   sessions, et l'heure de départ détermine leur date Europe/Paris.
-- Filtre par année civile et archives de matchs incomplets dans une section distincte.
+- Synthèse de la période sélectionnée (soirées, parties, bilan collectif et picks les plus
+  joués en icônes) et navigation segmentée par année civile; chaque soirée résume ses
+  résultats en losanges chronologiques.
+- Archives des matchs incomplets conservées dans une section distincte.
 - URLs permanentes `/matches/{id}` avec résultat, patch, compositions, statistiques,
   objectifs et lien externe League of Graphs.
-- Les pages détaillées peuvent aussi raconter un match individuel Solo/Duo.
-- Les timelines Match-V5, retournements, multikills et récapitulatifs annuels illustrés
-  ne sont pas livrés. Aucune timeline n'est téléchargée automatiquement.
+- Timelines Match-V5, retournements, multikills et récapitulatif annuel illustré restent
+  reportés; aucune timeline n'est téléchargée automatiquement.
 
 ### V2.5 — Automatisation · en partie déjà disponible
 
-- L'ingestion planifiée et l'indicateur de fraîcheur existaient déjà et sont réutilisés;
-  le webhook Discord, les images de partage personnalisées et les récapitulatifs
-  automatiques ne sont pas configurés ni activés.
-- La sauvegarde et le test de restauration Railway restent une opération à réaliser par
-  le propriétaire du service; aucun déploiement n'a été effectué pendant cette mission.
+- Ingestion planifiée et indicateur de fraîcheur réutilisés.
+- Webhook Discord, images de partage personnalisées et récapitulatifs automatiques non
+  configurés ni activés.
+- Sauvegarde et test de restauration Railway à réaliser par le propriétaire; aucun
+  déploiement n'a été effectué dans cette mission.
 
 ## Architecture et données
 
 - Astro SSR, SQLite `better-sqlite3`, SQL brut, Tailwind CSS v4 et Vitest sont conservés.
 - `src/lib/db/schema.ts` reste le schéma initial; `src/lib/db/migrations.ts` applique les
   évolutions avec `PRAGMA user_version` dans des transactions.
-- `matches.raw_json` reste la source historique du patch et des champs Match-V5. La table
-  `participants` garde les participants suivis; les agrégats individuels relisent les
-  participants nécessaires dans le JSON validé.
-- `getMatches`, `getOverview`, `getPlayers` et les agrégats de composition filtrent la
-  file Flex et le lineup de cinq. Les lignes Solo/Duo ne deviennent jamais une soirée,
-  un résultat partiel Flex ou un match d'équipe.
-- Les sessions de jeu utilisent un intervalle de quatre heures et le fuseau
-  `Europe/Paris`. Le filtre annuel est civil et ne prétend pas refléter le calendrier
-  compétitif de Riot.
-- Les nouveaux enregistrements de rang sont une photographie journalière, pas une série
-  de LP intrajournalière. Les entrées manquantes sont représentées comme non classées;
-  les erreurs Riot restent des erreurs et ne créent pas de rang vide présenté comme réel.
+- `matches.raw_json` conserve patch et champs Match-V5. `participants` conserve les
+  Étoiles présentes; les profils personnels relisent les participants suivis dans le JSON
+  validé.
+- Curseurs temporels de collecte et curseurs de backfill sont séparés. Les IDs de match
+  restent dans `ingest_pending` jusqu'à validation et écriture atomique; leur nombre
+  d'essais et leur date de reprise sont persistés.
+- `getMatches`, `getOverview`, `getPlayers` et les agrégats d'équipe restent filtrés par la
+  file Flex et le lineup à cinq. Solo/Duo n'entre jamais dans les statistiques collectives.
+- Les soirées utilisent quatre heures d'intervalle et le fuseau `Europe/Paris`; les
+  périodes de la mémoire sont civiles et ne prétendent pas reconstruire les saisons Riot.
+- Le rang est un snapshot journalier, pas une série intrajournalière de LP. Les entrées
+  manquantes sont représentées comme non classées; une erreur Riot ne fabrique pas un rang.
 
 ## API Riot et assets
 
@@ -105,51 +129,47 @@ Sources officielles consultées le 8 novembre 2026 :
 Match-V5 documente la liste des matchs par PUUID, le filtre `queue`, la pagination,
 le paramètre temporel et l'endpoint de timeline. La liste ne remonte pas aux parties
 antérieures à sa fenêtre de stockage (juin 2021); une timeline peut manquer pour une
-partie. Les endpoints renvoient notamment `429` en cas de limite atteinte. Le client
-conserve ses timeouts/retries et attend `Retry-After`; il n'envoie pas de rafale
-parallélisée. Les quotas de production dépendent de la clé et ne sont pas supposés.
+partie. Les endpoints renvoient notamment `429`. Les appels restent séquentiels, le client
+respecte `Retry-After`, et les quotas effectifs dépendent de la clé.
 
-League-V4 est appelé sur le routage plateforme EUW (`RIOT_PLATFORM=euw1` par défaut).
-La clé reste côté serveur dans `RIOT_API_KEY`. Les cinq comptes existants doivent être
-configurés et une ingestion réelle validée avant d'activer ou de vérifier le planning.
+League-V4 utilise le routage plateforme EUW (`RIOT_PLATFORM=euw1` par défaut). Le nouvel
+endpoint de rang et son accessibilité avec la clé réelle n'ont pas été vérifiés par un
+appel de production. Les cinq comptes doivent être configurés et une ingestion réelle
+validée avant d'activer ou de vérifier le planning.
 
-La politique Riot consultée limite les ressources aux assets du press kit et aux données
-statiques spécifiques au jeu, et exige le boilerplate légal visible. Les polices Beaufort
-et Spiegel ainsi que les arrière-plans client non utilisés ont été retirés; les champions,
-sorts et icônes de données statiques restent référencés localement. Une vérification
-juridique supplémentaire reste au propriétaire de l'application.
-
-### Pourquoi les timelines sont reportées
-
-Le produit ne conserve pas encore de critère testé pour décider qu'une partie mérite une
-timeline. En aspirer une pour chaque match gonflerait les appels et le stockage sans
-garantir un souvenir utile. Une prochaine tranche devra définir et tester les événements
-à extraire, stocker seulement un résumé compact idempotent, gérer les réponses absentes et
-ne jamais rendre l'affichage dépendant d'une timeline.
-
-## Parcours principaux
-
-1. **Ouvrir l'accueil** : voir la dernière soirée à cinq, sa composition, le résultat et la
-   forme collective; rejoindre l'historique, un profil ou le labo.
-2. **Se souvenir** : parcourir les soirées par année, ouvrir un match permanent et comparer
-   son patch, ses objectifs et ses deux équipes; les matchs incomplets restent à part.
-3. **Explorer un parcours personnel** : depuis une fiche, consulter son historique classé,
-   son pool, son rang le plus récent et les snapshots recueillis depuis la V2.
-4. **Préparer une composition** : choisir les cinq joueurs, les rôles et les champions;
-   utiliser ou ignorer les picks fréquents, puis consulter si l'idée a déjà été observée
-   ensemble. Une absence d'historique est affichée comme telle.
+Les mentions légales Riot restent visibles. Les polices Beaufort et Spiegel et les
+arrière-plans client non utilisés ont été retirés; les champions, sorts et icônes de données
+statiques restent référencés localement. Les emblèmes de rang présents dans
+`public/riot/ranks/` sont utilisés dans le profil secondaire.
 
 ## Validation et limites restantes
 
-- À exécuter avant déploiement : `npm run check`, `npm test` et `npm run build`.
-- À valider avec la clé et la base de production, sans exposer la clé : premier run
-  incrémental, backfill Solo/Duo explicite, snapshots de rang, reprise après 429 et
-  stabilité du volume SQLite Railway.
-- À construire ensuite : backfill timelines sélectionnées et extraction d'événements,
-  insights déterministes multi-signaux, saisons compétitives vérifiées, records,
-  récapitulatif annuel, OG personnalisé, partage Discord optionnel et sauvegarde/restauration
-  Railway testée.
-- Les joueurs et PUUID sont conservés dans le même modèle sans authentification, comme
-  l'application existante; les profils ne sont pas privés par contrôle d'accès.
-- Aucune collecte Riot n'a été lancée depuis cette mission : la disponibilité effective
-  des nouveaux endpoints dépend de la clé, des comptes et des limites du produit déployé.
+- Après cette passe : `npm run check`, `npm test` et `npm run build`; les routes principales
+  ont été contrôlées en local sur la base existante. Les parcours restent à vérifier
+  visuellement sur desktop et mobile.
+- Base locale après migration : 342 matchs (293 Flex, 49 Solo/Duo), 772 participants et
+  61 lineups Flex complets conservés; 608 détails sont en attente et prêts à traiter.
+  Aucun backfill, appel Riot réel, snapshot de rang ou déploiement n'a été déclenché.
+- À valider avec la clé et la base de production, sans révéler la clé : `npm run ingest`,
+  lots `npm run ingest:backfill`, reprise après interruption/429, endpoint League-V4,
+  snapshots et stabilité du volume Railway.
+- À construire ensuite : timelines sélectionnées et extraction d'événements, insights
+  déterministes multi-signaux, saisons compétitives vérifiées, records, récapitulatif
+  annuel, OG personnalisé, partage Discord optionnel et sauvegarde/restauration Railway
+  testée.
+- Les profils ne sont pas protégés par authentification; ils restent accessibles à toute
+  personne qui peut atteindre le site, comme dans l'application existante.
+
+## Parcours principaux
+
+1. **Accueil** : voir la dernière soirée, la forme collective puis les cinq profils; ouvrir
+   ensuite la chronologie ou préparer une idée de draft.
+2. **Mémoire** : comparer les repères d'une année, voir les picks marquants de la période,
+   parcourir les soirées et ouvrir une page permanente de match.
+3. **Profil** : lire les champions et statistiques à cinq, ouvrir une partie pour en voir
+   les détails, puis développer le parcours classé personnel et les snapshots de rang.
+4. **Draft** : cliquer un champion sur un ou plusieurs sièges, lire l'historique et les
+   synergies observées, recharger une composition déjà jouée puis copier le lien.
+5. **Synchronisation** : lancer `npm run ingest` pour les nouveautés; lancer plusieurs fois
+   `npm run ingest:backfill` pour le passé disponible, et vérifier l'avancement avec
+   `npm run ingest:status`.

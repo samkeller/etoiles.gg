@@ -1,5 +1,6 @@
 ---
 import ChampionIcon from '../ui/ChampionIcon.astro';
+import StarPresence from '../ui/StarPresence.astro';
 import { formatDuration, formatKda, formatShortDate, formatTime } from '../../lib/format';
 import type { MatchSummary } from '../../lib/stats';
 
@@ -39,11 +40,11 @@ const Action = permalinkOnly ? 'a' : 'button';
 			<time datetime={new Date(match.startedAt).toISOString()} class="text-ink">
 				{formatShortDate(match.startedAt)} <span class="text-muted">· {formatTime(match.startedAt)}</span>
 			</time>
-			{isPartial && <span class="label-caps text-muted">{match.lineupSize}/5 Étoiles</span>}
+			{isPartial && <StarPresence count={match.lineupSize} class="mt-0.5" />}
 		</span>
 
-		<span class="flex gap-1.5">
-			{match.members.map((member) => <ChampionIcon champion={member.champion} size="md" outcome={match.outcome} />)}
+		<span class="flex gap-1 sm:gap-1.5">
+			{match.members.map((member) => <ChampionIcon champion={member.champion} size="md" outcome={match.outcome} class="max-sm:size-7" tip={`${member.name} · ${member.kills}/${member.deaths}/${member.assists}`} />)}
 		</span>
 
 		<span class="text-right font-display text-base font-bold tabular-nums text-ink max-sm:hidden">

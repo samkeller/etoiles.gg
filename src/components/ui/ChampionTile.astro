@@ -1,0 +1,71 @@
+---
+import ChampionIcon from './ChampionIcon.astro';
+import { championName } from '../../lib/lol';
+import { formatPercent, recordTip } from '../../lib/format';
+import { MIN_DRAFT_GAMES } from '../../lib/stats';
+
+interface Props {
+	champion: string;
+	games: number;
+	wins: number;
+	lastPlayedAt?: number | null;
+	kda?: number | null;
+	/** `icon` : vignette compacte et bulle ; `row` : ligne lisible avec nom et barre. */
+	variant?: 'icon' | 'row';
+	size?: 'sm' | 'md' | 'lg';
+	/** Précision ajoutée en tête de bulle (« À cinq », « Solo/Duo »…). */
+	context?: string;
+	minimumGames?: number;
+	class?: string;
+}
+
+const {
+	champion,
+	games,
+	wins,
+	lastPlayedAt,
+	kda,
+	variant = 'icon',
+	size = 'md',
+	context,
+	minimumGames = MIN_DRAFT_GAMES,
+	class: className,
+} = Astro.props;
+const tip = [context, recordTip({ games, wins, lastPlayedAt, kda }, minimumGames)].filter(Boolean).join('\n');
+const winShare = games > 0 ? wins / games : 0;
+const hasRate = games >= minimumGames && games > 0;
+---
+
+{variant === 'icon' ? (
+	<span class:list={['group inline-flex shrink-0 flex-col items-stretch gap-1', className]}>
+		<span class="relative inline-flex">
+			<ChampionIcon {champion} {size} tip={tip} class="transition-transform duration-200 group-hover:-translate-y-0.5 motion-reduce:transition-none" />
+			<span aria-hidden="true" class="absolute -right-1.5 -bottom-1.5 min-w-5 border border-gold-300/70 bg-night-950 px-1 text-center font-display text-[0.65rem] leading-4 font-bold tabular-nums text-gold-100">
+				{games}
+			</span>
+		</span>
+		<span aria-hidden="true" class="flex h-0.5 overflow-hidden bg-grey-700">
+			<span class="block h-full origin-left animate-grow-x bg-gold-200 motion-reduce:animate-none" style={`width: ${winShare * 100}%`}></span>
+		</span>
+		<span class="sr-only">{championName(champion)} : {tip.replaceAll('\n', ', ')}</span>
+	</span>
+) : (
+	<span class:list={['flex min-w-0 items-center gap-3', className]}>
+		<ChampionIcon {champion} {size} tip={tip} />
+		<span class="min-w-0 flex-1">
+			<span class="flex items-baseline justify-between gap-2">
+				<span class="truncate text-sm text-ink">{championName(champion)}</span>
+				<span class="shrink-0 font-display text-base tabular-nums text-gold-100">
+					{games}<span class="sr-only"> parties</span>
+				</span>
+			</span>
+			<span aria-hidden="true" class="mt-1.5 flex h-1 overflow-hidden bg-grey-700/70">
+				<span class="block h-full origin-left animate-grow-x bg-linear-to-r from-gold-500 to-gold-200 motion-reduce:animate-none" style={`width: ${winShare * 100}%`}></span>
+			</span>
+			<span class="mt-1 flex justify-between gap-2 text-[0.7rem] tabular-nums text-muted">
+				<span>{wins} V · {games - wins} D</span>
+				<span class:list={[hasRate && winShare >= 0.5 && 'text-gold-200']}>{hasRate ? formatPercent(winShare) : ''}</span>
+			</span>
+		</span>
+	</span>
+)}

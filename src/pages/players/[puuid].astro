@@ -1,13 +1,19 @@
 ---
 import Avatar from '../../components/ui/Avatar.astro';
 import ChampionIcon from '../../components/ui/ChampionIcon.astro';
+import ChampionTile from '../../components/ui/ChampionTile.astro';
+import MeterBar from '../../components/ui/MeterBar.astro';
+import MotionItem from '../../components/ui/MotionItem.astro';
 import Panel from '../../components/ui/Panel.astro';
-import RoleIcon from '../../components/ui/RoleIcon.astro';
+import QueueBadge from '../../components/ui/QueueBadge.astro';
+import RankEmblem from '../../components/ui/RankEmblem.astro';
+import SegmentedNav from '../../components/ui/SegmentedNav.astro';
+import StarPresence from '../../components/ui/StarPresence.astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { db } from '../../lib/db/db';
-import { formatDate, formatPercent, formatKda, pluralize } from '../../lib/format';
-import { championName, profileIcon, roleLabel } from '../../lib/lol';
-import { getIndividualProfiles, getPlayers } from '../../lib/stats';
+import { formatDecimal, formatKda, formatPercent, formatSince, formatShortDate, pluralize } from '../../lib/format';
+import { championName, profileIcon, roleIcon, roleLabel, tierLabel } from '../../lib/lol';
+import { getIndividualProfiles, getPlayers, MIN_DRAFT_GAMES, type RankedMatch } from '../../lib/stats';
 
 export const prerender = false;
 
@@ -15,180 +21,263 @@ const puuid = Astro.params.puuid ?? '';
 const profile = getIndividualProfiles(db).find((player) => player.puuid === puuid);
 if (!profile) return new Response('Joueur introuvable.', { status: 404 });
 const teamProfile = getPlayers(db).find((player) => player.puuid === puuid);
-const recentMatches = [...profile.soloDuo.recentMatches, ...profile.flex.recentMatches]
-	.sort((left, right) => right.startedAt - left.startedAt || left.id.localeCompare(right.id))
-	.slice(0, 20);
-const rankQueues = [
-	{ label: 'Solo / Duo', activity: profile.soloDuo },
-	{ label: 'Flex', activity: profile.flex },
-];
+const teamGames = teamProfile?.games ?? 0;
+const teamWins = teamProfile?.champions.reduce((total, record) => total + record.wins, 0) ?? 0;
+
+const params = Astro.url.searchParams;
+const link = (key: string, value: string, anchor: string) => {
+	const next = new URLSearchParams(params);
+	next.set(key, value);
+	return `?${next.toString()}#${anchor}`;
+};
+
+const championSorts = [
+	{ value: 'games', label: 'Plus joués' },
+	{ value: 'rate', label: `Winrate · ${MIN_DRAFT_GAMES}+` },
+	{ value: 'recent', label: 'Récents' },
+] as const;
+type ChampionSort = (typeof championSorts)[number]['value'];
+const championSort: ChampionSort = championSorts.find((sort) => sort.value === params.get('champions'))?.value ?? 'games';
+const teamChampions = [...(teamProfile?.champions ?? [])].sort((left, right) => {
+	if (championSort === 'recent') return right.lastPlayedAt - left.lastPlayedAt;
+	if (championSort === 'rate') {
+		const leftEligible = left.games >= MIN_DRAFT_GAMES;
+		const rightEligible = right.games >= MIN_DRAFT_GAMES;
+		if (leftEligible !== rightEligible) return leftEligible ? -1 : 1;
+		if (leftEligible) {
+			const difference = right.wins / right.games - left.wins / left.games;
+			if (difference) return difference;
+		}
+	}
+	return right.games - left.games || left.champion.localeCompare(right.champion);
+});
+
+const allRecent = [...profile.soloDuo.recentMatches, ...profile.flex.recentMatches]
+	.sort((left, right) => right.startedAt - left.startedAt || left.id.localeCompare(right.id));
+const matchFilters = [
+	{ value: 'all', label: 'Toutes', test: () => true },
+	{ value: 'five', label: 'À cinq', test: (match: RankedMatch) => match.teamSize >= 5 },
+	{ value: 'group', label: 'En petit comité', test: (match: RankedMatch) => match.teamSize > 1 && match.teamSize < 5 },
+	{ value: 'alone', label: 'Sans les Étoiles', test: (match: RankedMatch) => match.teamSize <= 1 },
+] as const;
+const matchFilter = matchFilters.find((filter) => filter.value === params.get('parties')) ?? matchFilters[0];
+const recentMatches = allRecent.filter(matchFilter.test).slice(0, 20);
+
+const queues = [
+	{ key: 'soloDuo', label: 'Solo/Duo', activity: profile.soloDuo },
+	{ key: 'flex', label: 'Flex', activity: profile.flex },
+] as const;
+const mainStat = teamProfile?.mainRole === 'UTILITY'
+	? { label: 'Vision / min', value: teamProfile.visionPerMinute }
+	: { label: 'CS / min', value: teamProfile?.csPerMinute ?? null };
+const presenceTip = (match: RankedMatch) =>
+	match.queue === 'flex' && match.teamSize >= 5 ? 'Comptée dans les bilans collectifs' : undefined;
 ---
 
-<BaseLayout title={`${profile.name} — parcours personnel | etoiles.win`} description={`Parcours classé personnel de ${profile.name}, séparé des statistiques collectives des Étoiles de l’Esport.`}>
-	<main class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-12 px-4 py-10 sm:px-8 sm:py-14">
-		<nav aria-label="Fil d’Ariane">
-			<a href="/#roster-title" class="focus-ring text-sm text-muted transition-colors hover:text-ink">← Retour aux cinq Étoiles</a>
-		</nav>
+<BaseLayout title={`${profile.name} — etoiles.win`} description={`Les champions, les parties à cinq et le parcours classé de ${profile.name}.`}>
+	<main class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-10 px-4 py-8 sm:px-8 sm:py-12">
+		<a href="/#roster-title" class="focus-ring w-fit text-sm text-muted transition-colors hover:text-ink">← Les cinq Étoiles</a>
 
-		<header class="flex flex-col gap-6 border-b border-white/10 pb-8 sm:flex-row sm:items-center">
-			<Avatar src={profileIcon(profile.puuid)} class="size-24 sm:size-28" />
-			<div>
-				<p class="label-caps text-sky-300">Un parcours, jamais un classement</p>
-				<h1 class="mt-2 font-display text-4xl text-ink sm:text-5xl">{profile.name}</h1>
-				{profile.tagLine && <p class="mt-1 text-sm text-muted">#{profile.tagLine}</p>}
-				<p class="mt-4 max-w-2xl text-sm leading-relaxed text-muted">
-					Ses parties classées Solo/Duo et Flex, son pool de champions et son évolution de rang. Ce parcours est personnel et n’est pas comparé à ceux des autres joueurs.
-				</p>
+		<header class="grid items-center gap-6 border-b border-white/10 pb-8 sm:grid-cols-[auto_minmax(0,1fr)_auto]">
+			<Avatar src={profileIcon(profile.puuid)} class="size-20 sm:size-24" />
+			<div class="min-w-0">
+				<h1 class="font-display text-4xl break-words text-ink sm:text-5xl">
+					{profile.name}{profile.tagLine && <span class="ml-2 text-xl text-grey-700 sm:text-2xl">#{profile.tagLine}</span>}
+				</h1>
+				{teamProfile?.mainRole && (
+					<p class="mt-3 flex flex-wrap items-center gap-2">
+						{teamProfile.roles.map((share, index) => (
+							<span data-tip-title={roleLabel(share.role)} data-tip={`${pluralize(share.games, 'partie')} à cinq`}
+								class:list={['inline-flex h-8 items-center gap-2 border px-2.5 text-xs',
+									index === 0 ? 'border-gold-300/50 bg-gold-200/8 text-gold-100' : 'border-white/10 text-muted']}>
+								<img src={roleIcon(share.role)} alt="" width="34" height="34" class="size-4 object-contain" />
+								{index === 0 ? roleLabel(share.role) : share.games}
+								<span class="sr-only">{roleLabel(share.role)} : {share.games} parties</span>
+							</span>
+						))}
+					</p>
+				)}
+			</div>
+			<div class="flex gap-4 sm:justify-end">
+				{queues.map(({ label, activity }) => (
+					<div class="flex items-center gap-2">
+						<RankEmblem queue={label} rank={activity.currentRank} size="md" />
+						<div class="text-xs leading-tight">
+							<p class="label-caps text-[0.6rem] text-muted">{label}</p>
+							<p class="mt-1 text-sm text-ink">{activity.currentRank?.tier ? tierLabel(activity.currentRank.tier, activity.currentRank.division) : '—'}</p>
+							{activity.currentRank?.tier && activity.currentRank.leaguePoints !== null && (
+								<p class="tabular-nums text-muted">{activity.currentRank.leaguePoints} LP</p>
+							)}
+						</div>
+					</div>
+				))}
 			</div>
 		</header>
 
-		<section aria-labelledby="rank-heading">
-			<div class="mb-5">
-				<p class="label-caps text-sky-300">Repères de progression</p>
-				<h2 id="rank-heading" class="mt-2 font-display text-3xl text-ink">Le rang dans le temps</h2>
-			</div>
-			<div class="grid gap-4 md:grid-cols-2">
-				{rankQueues.map(({ label, activity }) => (
-					<Panel as="article" class="p-5 sm:p-7">
-						<p class="label-caps text-muted">Classé {label}</p>
-						{
-							activity.currentRank ? (
-								<>
-									<p class="mt-3 font-display text-2xl text-ink">
-										{activity.currentRank.tier
-											? `${activity.currentRank.tier} ${activity.currentRank.division ?? ''}`.trim()
-											: 'Non classé au dernier relevé'}
-									</p>
-									<p class="mt-2 text-sm text-muted">
-										Relevé du {activity.currentRank.capturedOn}
-										{activity.currentRank.leaguePoints !== null && ` · ${activity.currentRank.leaguePoints} LP`}
-									</p>
-									{activity.currentRank.wins !== null && activity.currentRank.losses !== null && (
-										<p class="mt-2 text-xs text-muted">
-											{activity.currentRank.wins} victoires · {activity.currentRank.losses} défaites au moment du relevé
-										</p>
-									)}
-								</>
-							) : (
-								<p class="mt-3 max-w-sm text-sm leading-relaxed text-muted">
-									Aucun snapshot enregistré. Le suivi commence à la prochaine synchronisation quotidienne; aucun rang antérieur n’est reconstitué.
-								</p>
-							)
-						}
-						{activity.rankHistory.length > 1 && (
-							<ol class="mt-5 flex flex-wrap gap-2 border-t border-white/10 pt-4">
-								{activity.rankHistory.map((snapshot) => (
-									<li class="border border-white/10 px-2.5 py-1.5 text-xs text-muted">
-										<time datetime={snapshot.capturedOn}>{snapshot.capturedOn}</time>
-										<span class="ml-2 text-ink">{snapshot.tier ? `${snapshot.tier} ${snapshot.division ?? ''}` : 'Non classé'}</span>
-									</li>
-								))}
-							</ol>
-						)}
-					</Panel>
-				))}
-			</div>
-		</section>
+		<div class="grid items-start gap-10 lg:grid-cols-[minmax(0,1.6fr)_minmax(18rem,1fr)] lg:gap-12">
+			<section aria-labelledby="team-heading" class="min-w-0">
+				<p class="label-caps text-gold-200">Avec les Étoiles</p>
+				<h2 id="team-heading" class="mt-2 font-display text-3xl text-ink">{pluralize(teamGames, 'partie')} à cinq</h2>
 
-		<section aria-labelledby="ranked-history-heading">
-			<div class="mb-5">
-				<p class="label-caps text-sky-300">Comprendre son jeu</p>
-				<h2 id="ranked-history-heading" class="mt-2 font-display text-3xl text-ink">Deux files, deux histoires.</h2>
-			</div>
-			<div class="grid gap-4 lg:grid-cols-2">
-				{rankQueues.map(({ label, activity }) => (
-					<Panel as="article" class="p-5 sm:p-7">
-						<div class="flex flex-wrap items-end justify-between gap-4">
-							<div>
-								<p class="label-caps text-muted">{label}</p>
-								<p class="mt-2 font-display text-3xl text-ink">{pluralize(activity.games, 'partie')}</p>
+				{teamProfile && teamGames > 0 ? (
+					<>
+						<dl class="mt-5 grid grid-cols-2 gap-px border border-white/10 bg-white/10 sm:grid-cols-4">
+							<div class="bg-night-900/90 p-4">
+								<dt class="label-caps text-muted">Bilan</dt>
+								<dd class="mt-2">
+									<span class="font-display text-2xl tabular-nums text-ink">{teamWins}<span class="text-grey-700"> – </span>{teamGames - teamWins}</span>
+									<MeterBar ratio={teamWins / teamGames} tone="win" class="mt-2 h-1" />
+									<span class="mt-1 block text-xs tabular-nums text-muted">{formatPercent(teamWins / teamGames)} de victoires</span>
+								</dd>
 							</div>
-							{activity.winRate !== null && (
-								<p class="text-right text-sm text-muted">
-									<span class="font-display text-2xl text-gold-200">{formatPercent(activity.winRate)}</span><br />
-									{activity.wins} victoires sur {activity.games}
-								</p>
-							)}
+							<div class="bg-night-900/90 p-4" data-tip={teamProfile.averageKills === null ? undefined : `Moyenne : ${formatDecimal(teamProfile.averageKills)} / ${formatDecimal(teamProfile.averageDeaths ?? 0)} / ${formatDecimal(teamProfile.averageAssists ?? 0)}`}>
+								<dt class="label-caps text-muted">KDA</dt>
+								<dd class="mt-2 font-display text-2xl tabular-nums text-ink">{teamProfile.kda === null ? '—' : formatDecimal(teamProfile.kda)}</dd>
+							</div>
+							<div class="bg-night-900/90 p-4" data-tip="Part des éliminations de l’équipe auxquelles il participe">
+								<dt class="label-caps text-muted">Participation</dt>
+								<dd class="mt-2 font-display text-2xl tabular-nums text-ink">
+									{teamProfile.killParticipation === null ? '—' : formatPercent(teamProfile.killParticipation)}
+								</dd>
+							</div>
+							<div class="bg-night-900/90 p-4">
+								<dt class="label-caps text-muted">{mainStat.label}</dt>
+								<dd class="mt-2 font-display text-2xl tabular-nums text-ink">{mainStat.value === null ? '—' : formatDecimal(mainStat.value)}</dd>
+							</div>
+						</dl>
+
+						<div id="pool" class="mt-8 flex scroll-mt-28 flex-wrap items-center justify-between gap-3">
+							<h3 class="font-display text-xl text-ink">
+								Pool à cinq <span class="font-body text-sm text-muted">· {pluralize(teamChampions.length, 'champion')}</span>
+							</h3>
+							<SegmentedNav label="Trier le pool à cinq" options={championSorts.map((sort) => ({
+								href: link('champions', sort.value, 'pool'),
+								label: sort.label,
+								active: sort.value === championSort,
+							}))} />
 						</div>
-						{
-							activity.games === 0 ? (
-								<p class="mt-6 border-t border-white/10 pt-5 text-sm leading-relaxed text-muted">
-									Aucune partie de cette file n’est enregistrée pour le moment. La collecte est incrémentale et ne concerne que le classé.
-								</p>
-							) : (
-								<>
-									{activity.champions.length > 0 && (
-										<div class="mt-6 border-t border-white/10 pt-5">
-											<p class="label-caps text-muted">Champions joués · échantillon affiché avec son volume</p>
-											<ul class="mt-4 flex flex-wrap gap-3">
-												{activity.champions.slice(0, 8).map((champion) => (
-													<li class="flex items-center gap-2 border border-white/8 bg-night-950/40 py-1.5 pr-3 pl-1.5">
-														<ChampionIcon champion={champion.champion} size="sm" />
-														<span class="text-xs text-ink">{championName(champion.champion)}</span>
-														<span class="text-xs tabular-nums text-muted">{champion.games}</span>
-													</li>
-												))}
-											</ul>
-										</div>
-									)}
-									{activity.roles.length > 0 && (
-										<p class="mt-4 flex flex-wrap items-center gap-2 text-xs text-muted">
-											Rôles les plus joués :
-											{activity.roles.slice(0, 3).map((role) => (
-												<span class="inline-flex items-center gap-1 text-ink">
-													<RoleIcon role={role.role} class="size-4" /> {roleLabel(role.role)} · {role.games}
-												</span>
-											))}
-										</p>
-									)}
-								</>
-							)
-						}
-					</Panel>
-				))}
-			</div>
-		</section>
+						<ul class="mt-4 grid gap-x-6 gap-y-4 sm:grid-cols-2 xl:grid-cols-3">
+							{teamChampions.map((record, index) => (
+								<MotionItem as="li" index={index}>
+									<ChampionTile variant="row" champion={record.champion} games={record.games} wins={record.wins}
+										lastPlayedAt={record.lastPlayedAt} kda={record.kda} context="À cinq" />
+								</MotionItem>
+							))}
+						</ul>
 
-		<section aria-labelledby="personal-matches-heading">
-			<div class="mb-5">
-				<p class="label-caps text-sky-300">Archives personnelles</p>
-				<h2 id="personal-matches-heading" class="mt-2 font-display text-3xl text-ink">Les dernières parties classées</h2>
-			</div>
-			{
-				recentMatches.length === 0 ? (
-					<p class="border-l border-white/15 py-3 pl-5 text-sm text-muted">
-						L’historique individuel sera visible ici au fil des synchronisations. Les parties collectives à cinq restent consultables dans la <a class="text-sky-300 underline" href="/history">mémoire de l’équipe</a>.
-					</p>
-				) : (
-					<ol class="divide-y divide-white/8 border-y border-white/10">
-						{recentMatches.map((match) => (
-							<li>
-								<a href={`/matches/${match.id}`} class="focus-ring grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 py-3 transition-colors hover:bg-white/5 sm:grid-cols-[7rem_minmax(0,1fr)_8rem]">
-									<span class:list={['font-display text-lg', match.outcome === 'win' ? 'text-gold-200' : 'text-grey-300']}>{match.outcome === 'win' ? 'Victoire' : 'Défaite'}</span>
-									<span class="flex min-w-0 items-center gap-3">
-										<ChampionIcon champion={match.champion} size="md" outcome={match.outcome} />
-										<span class="flex min-w-0 flex-col">
-											<span class="truncate text-sm text-ink">{championName(match.champion)} · {match.queue === 'soloDuo' ? 'Solo/Duo' : 'Flex'} · patch {match.patch}</span>
-											<time datetime={new Date(match.startedAt).toISOString()} class="text-xs text-muted">{formatDate(match.startedAt)}</time>
-										</span>
+						{teamProfile.bestGame && (
+							<a href={`/matches/${teamProfile.bestGame.matchId}`}
+								class="focus-ring group mt-8 flex items-center gap-4 border border-gold-300/30 bg-linear-to-r from-gold-200/8 to-transparent p-3 transition-colors hover:border-gold-200/70">
+								<ChampionIcon champion={teamProfile.bestGame.champion} size="lg" outcome={teamProfile.bestGame.outcome} tip={false} />
+								<span class="min-w-0 flex-1">
+									<span class="label-caps block text-gold-200">Sa plus belle ligne à cinq</span>
+									<span class="mt-1 block font-display text-xl tabular-nums text-ink">
+										{formatKda(teamProfile.bestGame.kills, teamProfile.bestGame.deaths, teamProfile.bestGame.assists)}
 									</span>
-									<span class="text-right text-xs tabular-nums text-muted">{formatKda(match.kills, match.deaths, match.assists)} <span class="sr-only">KDA</span></span>
-								</a>
-							</li>
-						))}
-					</ol>
-				)
-			}
-		</section>
+									<span class="text-xs text-muted">{championName(teamProfile.bestGame.champion)} · {formatShortDate(teamProfile.bestGame.startedAt)}</span>
+								</span>
+								<span aria-hidden="true" class="text-gold-200 transition-transform group-hover:translate-x-1">→</span>
+							</a>
+						)}
+					</>
+				) : (
+					<Panel class="mt-5 p-5 sm:p-7">
+						<p class="text-sm text-muted">Pas encore de partie complète à cinq.</p>
+					</Panel>
+				)}
+			</section>
 
-		{teamProfile && teamProfile.games > 0 && (
-			<aside class="border-l border-gold-200/30 py-2 pl-5 sm:pl-7">
-				<p class="label-caps text-gold-200">Mémoire collective</p>
-				<p class="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
-					Cette page distingue son activité classée personnelle du collectif. {pluralize(teamProfile.games, 'match')} de son parcours avec les cinq sont déjà présents dans les statistiques de l’équipe.
-				</p>
-				<a href="/#collective-title" class="focus-ring mt-3 inline-block text-sm text-ink underline underline-offset-4">Retrouver les statistiques à cinq</a>
+			<aside aria-labelledby="ranked-heading" class="min-w-0 lg:sticky lg:top-24">
+				<p class="label-caps text-hextech-300">En solo & en flex</p>
+				<h2 id="ranked-heading" class="mt-2 font-display text-3xl text-ink">Parcours classé</h2>
+				<div class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+					{queues.map(({ key, label, activity }) => (
+						<Panel as="article" class="p-4">
+							<div class="flex items-center gap-3">
+								<RankEmblem queue={label} rank={activity.currentRank} size="md" />
+								<div class="min-w-0 flex-1">
+									<h3 class="flex items-center gap-2"><QueueBadge queue={key} /><span class="sr-only">{label}</span></h3>
+									<p class="mt-1 text-sm tabular-nums text-ink">
+										{activity.games > 0 ? <>{activity.wins} V <span class="text-grey-700">–</span> {activity.games - activity.wins} D</> : 'Aucune partie enregistrée'}
+									</p>
+									{activity.games > 0 && (
+										<p class="text-xs text-muted">{activity.lastPlayedAt && `Dernière ${formatSince(activity.lastPlayedAt)}`}</p>
+									)}
+								</div>
+								{activity.winRate !== null && activity.games >= MIN_DRAFT_GAMES && (
+									<span class="font-display text-xl tabular-nums text-gold-100">{formatPercent(activity.winRate)}</span>
+								)}
+							</div>
+							{activity.games > 0 && <MeterBar ratio={activity.wins / activity.games} tone="win" class="mt-3 h-1" />}
+							{activity.champions.length > 0 && (
+								<ul class="mt-4 flex flex-wrap gap-x-3 gap-y-3" aria-label={`Champions les plus joués en ${label}`}>
+									{activity.champions.slice(0, 6).map((record) => (
+										<li>
+											<ChampionTile champion={record.champion} games={record.games} wins={record.wins}
+												lastPlayedAt={record.lastPlayedAt} size="sm" context={label} />
+										</li>
+									))}
+								</ul>
+							)}
+							{activity.rankHistory.length > 1 && (
+								<ol class="mt-4 flex flex-wrap gap-1.5 border-t border-white/10 pt-3" aria-label={`Relevés de rang ${label}`}>
+									{activity.rankHistory.slice(-6).map((snapshot) => (
+										<li class="inline-flex items-center gap-1.5 border border-white/10 px-1.5 py-0.5 text-[0.65rem] text-muted">
+											<RankEmblem queue={label} rank={snapshot} size="sm" class="size-5" />
+											<time datetime={snapshot.capturedOn}>{snapshot.capturedOn.slice(5).split('-').reverse().join('/')}</time>
+										</li>
+									))}
+								</ol>
+							)}
+						</Panel>
+					))}
+				</div>
 			</aside>
-		)}
+		</div>
+
+		<section id="recent" aria-labelledby="recent-heading" class="scroll-mt-24">
+			<div class="flex flex-wrap items-end justify-between gap-3">
+				<h2 id="recent-heading" class="font-display text-3xl text-ink">Dernières parties</h2>
+				<SegmentedNav label="Filtrer les parties" options={matchFilters.map((filter) => ({
+					href: link('parties', filter.value, 'recent'),
+					label: `${filter.label} · ${allRecent.filter(filter.test).length}`,
+					active: filter.value === matchFilter.value,
+				}))} />
+			</div>
+			{recentMatches.length === 0 ? (
+				<p class="mt-5 border-l border-white/15 py-3 pl-5 text-sm text-muted">Aucune partie classée dans cette sélection.</p>
+			) : (
+				<ol class="mt-5 divide-y divide-white/8 border-y border-white/10">
+					{recentMatches.map((match, index) => (
+						<MotionItem as="li" index={index} delayStep={25}>
+							<a href={`/matches/${match.id}`}
+								class="focus-ring group relative grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 py-3 pr-3 pl-5 transition-colors hover:bg-white/5 md:grid-cols-[auto_minmax(0,1fr)_4rem_6.5rem_7rem_6.5rem]">
+								<span aria-hidden="true" class:list={['absolute inset-y-2 left-0 w-1', match.outcome === 'win' ? 'bg-win shadow-glow-gold' : 'bg-loss']}></span>
+								<span class="relative">
+									<ChampionIcon champion={match.champion} size="md" outcome={match.outcome} tip={false} />
+									<img src={roleIcon(match.role)} alt="" width="34" height="34" class="absolute -right-1.5 -bottom-1.5 size-4 rounded-full bg-night-950 p-px" />
+								</span>
+								<span class="min-w-0">
+									<span class:list={['block font-display text-base', match.outcome === 'win' ? 'text-gold-100' : 'text-grey-300']}>
+										{match.outcome === 'win' ? 'Victoire' : 'Défaite'}
+										<span class="font-body text-sm text-muted"> · {championName(match.champion)}</span>
+									</span>
+									<span class="block text-xs text-muted">
+										<span class="sr-only">{roleLabel(match.role)}, </span>
+										<time datetime={new Date(match.startedAt).toISOString()}>{formatShortDate(match.startedAt)}</time> · patch {match.patch}
+									</span>
+								</span>
+								<QueueBadge queue={match.queue} class="justify-self-end md:justify-self-start" />
+								<StarPresence count={match.teamSize} tip={presenceTip(match)} class="col-start-2 md:col-auto" />
+								<span class="col-start-3 row-start-2 text-right text-sm tabular-nums text-ink md:col-auto md:row-auto md:text-left">
+									{formatKda(match.kills, match.deaths, match.assists)}
+								</span>
+								<span class="hidden text-right text-xs text-muted md:block">{formatSince(match.startedAt)}</span>
+							</a>
+						</MotionItem>
+					))}
+				</ol>
+			)}
+		</section>
 	</main>
 </BaseLayout>

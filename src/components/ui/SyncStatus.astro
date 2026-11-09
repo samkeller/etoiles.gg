@@ -14,7 +14,7 @@ const formatted = date?.toLocaleString('fr-FR', {
 });
 ---
 
-<p class="py-4 text-xs text-muted">
+<p class="flex flex-wrap gap-x-1.5 py-4 text-xs text-muted">
 	{status.state === 'running' ? (
 		<span>Synchronisation en cours.</span>
 	) : status.state === 'interrupted' ? (
