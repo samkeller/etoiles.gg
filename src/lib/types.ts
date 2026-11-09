@@ -36,6 +36,9 @@ export interface ParticipantDto {
     visionScore: number;
     summoner1Id?: number;
     summoner2Id?: number;
+    pentaKills?: number;
+    quadraKills?: number;
+    gameEndedInEarlySurrender?: boolean;
 }
 
 export type Position = | 'TOP' | 'JUNGLE' | 'MIDDLE' | 'BOTTOM' | 'UTILITY';

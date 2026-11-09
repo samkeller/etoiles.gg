@@ -31,6 +31,9 @@ export interface FixtureMember {
 	cs?: number;
 	damage?: number;
 	vision?: number;
+	pentaKills?: number;
+	quadraKills?: number;
+	earlySurrender?: boolean;
 }
 
 export interface FixtureMatch {
@@ -46,6 +49,7 @@ export interface FixtureMatch {
 	gameVersion?: string;
 	/** Clés numériques bannies par notre équipe (côté 100) ; omis = réponse sans bans. */
 	bans?: readonly number[];
+	firstDragon?: 'ours' | 'theirs';
 }
 
 const FILLER_ROLES: readonly Position[] = ['TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM', 'UTILITY'];
@@ -69,6 +73,9 @@ function participant(member: FixtureMember, teamId: TeamId, win: boolean): Parti
 		goldEarned: 10000,
 		totalDamageDealtToChampions: member.damage ?? 0,
 		visionScore: member.vision ?? 0,
+		...(member.pentaKills === undefined ? {} : { pentaKills: member.pentaKills }),
+		...(member.quadraKills === undefined ? {} : { quadraKills: member.quadraKills }),
+		...(member.earlySurrender === undefined ? {} : { gameEndedInEarlySurrender: member.earlySurrender }),
 	};
 }
 
@@ -104,10 +111,10 @@ export function addMatch(database: Database.Database, match: FixtureMatch): void
 				{
 					teamId: 100,
 					win: match.won,
-					objectives: objectives(match.won ? 3 : 1),
+					objectives: { ...objectives(match.won ? 3 : 1), dragon: { first: match.firstDragon === 'ours', kills: match.won ? 3 : 1 } },
 					...(match.bans ? { bans: match.bans.map((championId, index) => ({ championId, pickTurn: index + 1 })) } : {}),
 				},
-				{ teamId: 200, win: !match.won, objectives: objectives(match.won ? 1 : 3) },
+				{ teamId: 200, win: !match.won, objectives: { ...objectives(match.won ? 1 : 3), dragon: { first: match.firstDragon === 'theirs', kills: match.won ? 1 : 3 } } },
 			],
 		},
 	};
@@ -140,6 +147,28 @@ export function addMatch(database: Database.Database, match: FixtureMatch): void
 /** Cinq membres anonymes, un par rôle. */
 export function fullLineup(overrides: Partial<Record<number, Partial<FixtureMember>>> = {}): FixtureMember[] {
 	return FILLER_ROLES.map((role, index) => ({ puuid: `player-${index}`, role, ...overrides[index] }));
+}
+
+export function timelineFixture(match: MatchDto, deficits: number[] = [0, -6000, 1000]) {
+	return {
+		metadata: { matchId: match.metadata.matchId },
+		info: {
+			participants: match.info.participants.map((player, index) => ({ participantId: index + 1, puuid: player.puuid })),
+			frames: deficits.map((diff, index) => ({
+				timestamp: index * 60_000,
+				participantFrames: Object.fromEntries(match.info.participants.map((_player, participantIndex) => [
+					String(participantIndex + 1), {
+						participantId: participantIndex + 1,
+						totalGold: 10000 + index * 5000 + (participantIndex === 0 ? diff : 0),
+					},
+				])),
+				events: index === 1 ? [
+					{ type: 'ELITE_MONSTER_KILL', timestamp: 55000, monsterType: 'DRAGON', killerId: 2 },
+					{ type: 'BUILDING_KILL', timestamp: 60000, buildingType: 'TOWER_BUILDING', teamId: 100, killerId: 0 },
+				] : [],
+			})),
+		},
+	};
 }
 
 export function seedRankedHistory(database: Database.Database, count: number): void {

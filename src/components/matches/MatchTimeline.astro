@@ -1,0 +1,55 @@
+---
+import type { TimelineState } from '../../lib/stats/timelines';
+import { OBJECTIVE_LABELS } from '../../lib/timeline';
+import { formatCompact, formatDuration } from '../../lib/format';
+interface Props { timeline: TimelineState; }
+const { timeline } = Astro.props;
+const summary = timeline.summary;
+const width = 800;
+const height = 220;
+const padding = 28;
+const extent = Math.max(1000, ...(summary?.gold.map((frame) => Math.abs(frame.diff)) ?? []));
+const end = summary?.gold.at(-1)?.at ?? 1;
+const x = (at: number) => padding + at / end * (width - padding * 2);
+const y = (diff: number) => padding + (1 - diff / extent) / 2 * (height - padding * 2);
+const signed = (diff: number) => `${diff > 0 ? '+' : diff < 0 ? '−' : ''}${formatCompact(Math.abs(diff))}`;
+---
+<section aria-label="Déroulé du match" class="min-w-0 border-t border-white/10 pt-5">
+	<h3 class="font-display text-xl text-ink">Le fil de la partie</h3>
+	{summary ? (
+		<>
+			<p class="mt-2 text-xs text-muted"><span class="text-gold-200">Au-dessus de zéro : avance des Étoiles</span> · en dessous : avance adverse</p>
+			<p class="mt-4 text-xs tabular-nums text-muted">Échelle : {signed(-extent)} à {signed(extent)} or</p>
+			<svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" class="mt-1 h-40 w-full sm:h-56" role="img" aria-label="Écart d’or entre les deux équipes au fil des relevés. Valeurs et objectifs dans le détail ci-dessous.">
+				<line x1={padding} x2={width - padding} y1={y(0)} y2={y(0)} stroke-dasharray="4 5" class="stroke-white/25" />
+				<polyline points={summary.gold.map((frame) => `${x(frame.at)},${y(frame.diff)}`).join(' ')}
+					fill="none" class="stroke-gold-200" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round" />
+				{summary.gold.map((frame) => <circle cx={x(frame.at)} cy={y(frame.diff)} r="2.5" class="fill-gold-200"><title>{formatDuration(Math.floor(frame.at / 1000))} · {signed(frame.diff)} or</title></circle>)}
+			</svg>
+			<div class="flex justify-between text-xs tabular-nums text-muted"><span>0:00</span><span>{formatDuration(Math.floor(end / 1000))}</span></div>
+			<details class="mt-3 text-xs">
+				<summary class="focus-ring w-fit cursor-pointer text-hextech-300">Objectifs & relevés d’or</summary>
+				<div class="mt-4 grid gap-5 md:grid-cols-2">
+					<div>
+						<p class="label-caps text-muted">Objectifs</p>
+						{summary.objectives.length ? <ol class="mt-2 max-h-64 space-y-2 overflow-y-auto">
+							{summary.objectives.map((event) => <li class="flex gap-3">
+								<time class="w-10 shrink-0 tabular-nums text-muted">{formatDuration(Math.floor(event.at / 1000))}</time>
+								<span class:list={[event.ours === true ? 'text-gold-100' : 'text-muted']}>{OBJECTIVE_LABELS[event.kind]} · {event.ours === true ? 'Étoiles' : event.ours === false ? 'Adversaires' : 'Équipe non identifiée'}</span>
+							</li>)}
+						</ol> : <p class="mt-2 text-muted">Aucun objectif dans la timeline reçue.</p>}
+					</div>
+					<div>
+						<p class="label-caps text-muted">Or · Étoiles − adversaires</p>
+						<ol class="mt-2 max-h-64 space-y-2 overflow-y-auto">
+							{summary.gold.map((frame) => <li class="flex gap-3 tabular-nums">
+								<span class="w-10 text-muted">{formatDuration(Math.floor(frame.at / 1000))}</span><span class="text-ink">{signed(frame.diff)}</span>
+							</li>)}
+						</ol>
+					</div>
+				</div>
+				<p class="mt-3 text-muted">Relevés Riot, généralement à la minute ; pas une mesure continue. Aucun inventaire ni position conservés.</p>
+			</details>
+		</>
+	) : <p class="mt-2 text-sm text-muted">{timeline.status === 'unavailable' ? 'Riot ne fournit pas de timeline pour cette partie.' : 'Timeline en attente de synchronisation.'}</p>}
+</section>

@@ -3,19 +3,20 @@ import type { FlexMatchIdsOptions } from '../lib/riot';
 import type { LeagueEntryDto, MatchDto } from '../lib/types';
 import { validateMatch } from '../lib/matchValidation';
 import { validatedLineup } from '../lib/stats/shared';
-import { RateLimitError } from '../lib/backendHttp';
+import { deferredRetryDelay, RateLimitError } from '../lib/backendHttp';
+import { collectTimelines } from './timelineBackend';
 
 const MATCH_PAGE_SIZE = 100;
 const BACKFILL_PAGES_PER_QUEUE = 2;
 const MATCH_DETAILS_PER_RUN = 100;
 const RANKED_QUEUES = [440, 420] as const;
-const MAX_RETRY_DELAY_MS = 6 * 60 * 60 * 1000;
 
 interface RiotClient {
 	getFlexMatchIds(puuid: string, options: FlexMatchIdsOptions): Promise<string[]>;
 	getRankedMatchIds?(puuid: string, options: FlexMatchIdsOptions): Promise<string[]>;
 	getMatch(id: string): Promise<MatchDto>;
 	getRankEntries?(puuid: string): Promise<LeagueEntryDto[]>;
+	getTimeline?(id: string): Promise<unknown | null>;
 }
 
 interface BackfillCursor {
@@ -31,8 +32,7 @@ function deferMatch(database: Database.Database, id: string, error: unknown): vo
 	const row = database.prepare('SELECT attempts FROM ingest_pending WHERE match_id = ?')
 		.get(id) as { attempts: number } | undefined;
 	if (!row) return;
-	const baseDelay = error instanceof RateLimitError ? 15 * 60 * 1000 : 60 * 1000;
-	const delay = Math.min(baseDelay * 2 ** Math.min(row.attempts, 8), MAX_RETRY_DELAY_MS);
+	const delay = deferredRetryDelay(error, row.attempts);
 	database.prepare('UPDATE ingest_pending SET attempts = attempts + 1, next_attempt_at = ? WHERE match_id = ?')
 		.run(Date.now() + delay, id);
 }
@@ -46,6 +46,8 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 	let existingMatches = 0;
 	let repairedMatches = 0;
 	let budgetExhausted = false;
+	let timelinesCollected = 0;
+	let timelinesUnavailable = 0;
 	const withinBudget = () => {
 		if (options.deadlineAt !== undefined && Date.now() >= options.deadlineAt) {
 			budgetExhausted = true;
@@ -185,6 +187,7 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 				if (ours.some((participant) => participant.teamId !== ours[0].teamId)) throw new Error('Roster spans opposing teams');
 				database.transaction(() => {
 					if (existing) {
+						database.prepare('DELETE FROM match_timelines WHERE match_id = ?').run(id);
 						database.prepare('DELETE FROM participants WHERE match_id = ?').run(id);
 						database.prepare('DELETE FROM matches WHERE match_id = ?').run(id);
 					}
@@ -238,6 +241,12 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 				}
 			}
 		}
+		if (client.getTimeline && !failures.length) {
+			const timelines = await collectTimelines(database, client.getTimeline, withinBudget);
+			timelinesCollected = timelines.collected;
+			timelinesUnavailable = timelines.unavailable;
+			failures.push(...timelines.failures);
+		}
 	} catch (error) {
 		if (!failures.some((failure) => failure.includes(messageOf(error)))) failures.push(messageOf(error));
 	} finally {
@@ -246,5 +255,6 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 
 	database.prepare('INSERT INTO ingest_runs (started_at, finished_at, new_matches, status) VALUES (?, ?, ?, ?)')
 		.run(startedAt, Date.now(), newMatches, failures.length ? 'failed' : 'ok');
-	return { newMatches, failures, pendingRemaining, importedByQueue, existingMatches, repairedMatches, budgetExhausted };
+	return { newMatches, failures, pendingRemaining, importedByQueue, existingMatches, repairedMatches, budgetExhausted,
+		timelinesCollected, timelinesUnavailable };
 }

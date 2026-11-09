@@ -24,7 +24,8 @@ it('creates local storage and preserves data and migrates old runs across reopen
 	database = new Database(path);
 	database.exec('DROP TABLE ingest_runs; CREATE TABLE ingest_runs (started_at INTEGER, new_matches INTEGER, status TEXT)');
 	database.pragma('user_version = 3');
-	database.exec(`DROP TABLE data_revision;
+	database.exec(`DROP TABLE match_timelines;
+		DROP TABLE data_revision;
 		DROP TRIGGER players_revision_insert; DROP TRIGGER players_revision_update; DROP TRIGGER players_revision_delete;
 		DROP TRIGGER matches_revision_insert; DROP TRIGGER matches_revision_update; DROP TRIGGER matches_revision_delete;
 		DROP TRIGGER participants_revision_insert; DROP TRIGGER participants_revision_update; DROP TRIGGER participants_revision_delete;

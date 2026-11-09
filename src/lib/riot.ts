@@ -2,6 +2,7 @@ import 'dotenv/config';
 import type { LeagueEntryDto, MatchDto } from './types';
 import { request } from './backendHttp';
 import { validateMatch } from './matchValidation';
+import { HttpError } from './backendHttp';
 
 export function riotHeaders(): Record<string, string> {
     const token = process.env.RIOT_API_KEY?.trim();
@@ -76,6 +77,16 @@ export const getRankedMatchIds = getFlexMatchIds;
 export async function getMatch(matchId: string): Promise<MatchDto> {
     if (!/^[A-Z0-9]{2,8}_\d{1,20}$/.test(matchId)) throw new Error('Invalid match ID');
     return validateMatch(await get(`/lol/match/v5/matches/${matchId}`), matchId);
+}
+
+export async function getTimeline(matchId: string): Promise<unknown | null> {
+    if (!/^[A-Z0-9]{2,8}_\d{1,20}$/.test(matchId)) throw new Error('Invalid match ID');
+    try {
+        return await get(`/lol/match/v5/matches/${matchId}/timeline`);
+    } catch (error) {
+        if (error instanceof HttpError && error.status === 404) return null;
+        throw error;
+    }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

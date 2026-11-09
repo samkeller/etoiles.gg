@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3';
 import { SCHEMA } from './schema';
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 interface Migration {
 	version: number;
@@ -124,6 +124,32 @@ const migrations: readonly Migration[] = [
 				}
 			}
 		},
+	},
+	{
+		version: 6,
+		sql: `
+			CREATE TABLE match_timelines (
+				match_id TEXT PRIMARY KEY REFERENCES matches(match_id) ON DELETE CASCADE,
+				status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'ready', 'unavailable')),
+				summary_json TEXT,
+				attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+				next_attempt_at INTEGER NOT NULL DEFAULT 0 CHECK (next_attempt_at >= 0),
+				last_error TEXT,
+				updated_at INTEGER NOT NULL,
+				CHECK ((status = 'ready' AND summary_json IS NOT NULL) OR (status != 'ready' AND summary_json IS NULL))
+			);
+			CREATE INDEX timelines_pending ON match_timelines(status, next_attempt_at);
+			CREATE TRIGGER timelines_revision_insert AFTER INSERT ON match_timelines BEGIN
+				UPDATE data_revision SET version = version + 1 WHERE id = 1;
+			END;
+			CREATE TRIGGER timelines_revision_update AFTER UPDATE ON match_timelines
+			WHEN OLD.status IS NOT NEW.status OR OLD.summary_json IS NOT NEW.summary_json BEGIN
+				UPDATE data_revision SET version = version + 1 WHERE id = 1;
+			END;
+			CREATE TRIGGER timelines_revision_delete AFTER DELETE ON match_timelines BEGIN
+				UPDATE data_revision SET version = version + 1 WHERE id = 1;
+			END;
+		`,
 	},
 ];
 

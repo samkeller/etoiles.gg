@@ -1,0 +1,39 @@
+---
+import type { TeamMoment } from '../../lib/stats/moments';
+import { formatShortDate, pluralize } from '../../lib/format';
+import ChampionIcon from '../ui/ChampionIcon.astro';
+import MotionItem from '../ui/MotionItem.astro';
+import OpggIcon from '../ui/OpggIcon.astro';
+interface Props {
+	moments: readonly TeamMoment[];
+	label: string;
+	compact?: boolean;
+}
+const { moments, label, compact = false } = Astro.props;
+---
+
+<ul aria-label={label} class:list={['grid gap-3', compact ? 'md:grid-cols-3' : 'sm:grid-cols-2 xl:grid-cols-3']}>
+	{moments.map((moment, index) => (
+		<MotionItem as="li" index={index} class="min-w-0 border border-gold-300/20 bg-night-900/50">
+			<a href={`/matches/${moment.matchIds[0]}`} class="focus-ring group flex h-full items-center gap-3 p-4 transition-colors hover:bg-gold-200/5"
+				data-tip={`${pluralize(moment.matchIds.length, 'partie')} à cinq · ${formatShortDate(moment.startedAt)}`}>
+				{moment.champion ? <ChampionIcon champion={moment.champion} size="md" tip={false} /> :
+					<span aria-hidden="true" class="grid size-9 shrink-0 place-items-center border border-gold-300/30 text-gold-200">✦</span>}
+				<span class="min-w-0 flex-1">
+					<span class="label-caps block text-[0.6rem] text-muted">{moment.title}</span>
+					<span class="mt-1 block font-display text-xl text-gold-100">{moment.value}</span>
+					<time datetime={new Date(moment.startedAt).toISOString()} class="mt-1 block text-xs text-muted">{formatShortDate(moment.startedAt)}</time>
+				</span>
+				<OpggIcon name="ui-arrow-right" class="size-3 shrink-0 text-gold-300 transition-transform group-hover:translate-x-1" />
+			</a>
+			{moment.matchIds.length > 1 && (
+				<details class="border-t border-white/8 px-4 py-2 text-xs">
+					<summary class="focus-ring cursor-pointer text-muted">Les {moment.matchIds.length} parties</summary>
+					<ol class="mt-2 flex flex-wrap gap-2 pb-2">
+						{moment.matchIds.map((id, i) => <li><a href={`/matches/${id}`} class="focus-ring border border-white/15 px-2 py-1 text-gold-200 hover:border-gold-300">{i + 1}<span class="sr-only"> · {id}</span></a></li>)}
+					</ol>
+				</details>
+			)}
+		</MotionItem>
+	))}
+</ul>

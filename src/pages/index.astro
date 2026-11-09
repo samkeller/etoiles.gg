@@ -10,6 +10,9 @@ import { getCollective, getMatches, getOverview, getPlayers, getSessionHistory }
 import { isPosition } from '../lib/lol';
 import type { Position } from '../lib/types';
 import { TEAM_NAME } from '../lib/site';
+import MomentList from '../components/memory/MomentList.astro';
+import Discoveries from '../components/collective/Discoveries.astro';
+import { getTeamStories, getDiscoveries } from '../lib/stats';
 
 const associationRoles: Position[] = [];
 for (const key of ['role', 'role2']) {
@@ -26,13 +29,25 @@ const partialMatches = getMatches(db, 'partial');
 const sessions = getSessionHistory(db);
 const collective = getCollective(db, associationRoles);
 const recentMatches = fullMatches.slice(0, overview.recentForm.length).reverse();
+const stories = getTeamStories(db);
+const discoveries = getDiscoveries(db);
 ---
 
 <BaseLayout title={`${TEAM_NAME} — le carnet de bord`} description="Les parties, les soirées et les idées des Étoiles de l’Esport. Fait à cinq, pour les cinq.">
 	<main class="flex w-full flex-1 flex-col gap-16 pb-16 sm:gap-24">
 		<TeamOverview overview={overview} recentMatches={recentMatches} latestSession={sessions[0] ?? null} />
 		<div class="mx-auto flex w-full max-w-7xl flex-col gap-16 px-4 sm:gap-24 sm:px-8">
+			{stories.recent.length > 0 && (
+				<section aria-label="Moments récents">
+					<div class="mb-4 flex flex-wrap items-baseline justify-between gap-3">
+						<h2 class="font-display text-2xl text-ink">Récemment, à cinq</h2>
+						<a href="/history#records" class="focus-ring text-sm text-gold-200 hover:text-gold-100">Tous nos repères →</a>
+					</div>
+					<MomentList moments={stories.recent} label="Sur nos dix dernières parties à cinq" compact />
+				</section>
+			)}
 			<TeamRoster players={players} />
+			<Discoveries discoveries={discoveries} matches={fullMatches} />
 			<SessionConstellation sessions={sessions} compact />
 			<MatchHistory fullMatches={fullMatches} partialMatches={partialMatches} />
 			<TeamCollective collective={collective} associationRoles={associationRoles} />

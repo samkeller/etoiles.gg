@@ -26,6 +26,9 @@ export function assertMatchDto(value: unknown, expectedId?: string): asserts val
 			typeof participant.individualPosition !== 'string' || typeof participant.win !== 'boolean' ||
 			!['TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM', 'UTILITY', 'Invalid'].includes(participant.individualPosition) ||
 			typeof participant.riotIdGameName !== 'string' || typeof participant.riotIdTagline !== 'string' ||
+			!['pentaKills', 'quadraKills'].every((key) => participant[key] === undefined ||
+				(typeof participant[key] === 'number' && Number.isSafeInteger(participant[key]) && participant[key] >= 0)) ||
+			(participant.gameEndedInEarlySurrender !== undefined && typeof participant.gameEndedInEarlySurrender !== 'boolean') ||
 			!['summoner1Id', 'summoner2Id'].every((key) => participant[key] === undefined ||
 				(typeof participant[key] === 'number' && Number.isSafeInteger(participant[key]) && participant[key] > 0)) ||
 			!['kills', 'deaths', 'assists', 'champLevel', 'totalMinionsKilled', 'neutralMinionsKilled',

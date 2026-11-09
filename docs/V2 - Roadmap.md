@@ -27,7 +27,7 @@ validées et les fonctionnalités encore reportées sont distingués ci-dessous.
 
 ### V2.1 — Données enrichies · socle livré, collecte réelle à valider
 
-- Migrations SQLite V1 à V5 additives et transactionnelles; les matchs, participants et
+- Migrations SQLite V1 à V6 additives et transactionnelles; les matchs, participants et
   réponses `raw_json` existants sont conservés. V3 répare aussi une base déjà marquée V2
   si elle n'a pas les colonnes de reprise des détails.
 - Collecte classée Solo/Duo (`queue 420`) avec curseur distinct; collecte Flex (`queue 440`)
@@ -55,8 +55,12 @@ validées et les fonctionnalités encore reportées sont distingués ci-dessous.
 - L'historique personnel récent indique aussi le nombre d'Étoiles présentes dans la partie.
 - Solo/Duo, Flex et rangs sont toujours consultables, mais dans une section secondaire.
   Les emblèmes locaux sont utilisés pour les tiers connus.
-- Les insights multi-signaux, records enrichis et comparaisons temporelles avancées restent
-  à développer; aucune phrase de causalité n'est générée.
+- Trois découvertes déterministes : premier dragon et résultat, nouveau pick fréquent,
+  pool personnel élargi à cinq. Les échantillons, seuils et parties sources sont accessibles;
+  aucun emplacement n'est rempli quand les données ne justifient pas de découverte.
+- Courbe du rang datée dans le profil, distincte pour Solo/Duo et Flex : à partir de deux
+  relevés classés, sans inventer d'historique. Jours absents, périodes non classées et
+  remises à zéro des compteurs interrompent la courbe.
 - Les taux collectifs par patch restent calculés, mais leur panneau d'accueil sans question
   produit utile a été retiré.
 
@@ -87,16 +91,44 @@ validées et les fonctionnalités encore reportées sont distingués ci-dessous.
 - Archives des matchs incomplets conservées dans une section distincte.
 - URLs permanentes `/matches/{id}` avec résultat, patch, compositions, statistiques,
   objectifs et lien externe League of Graphs.
-- Timelines Match-V5, retournements, multikills et récapitulatif annuel illustré restent
-  reportés; aucune timeline n'est téléchargée automatiquement.
+- Records sur la période choisie : victoire la plus rapide, partie la plus longue,
+  éliminations collectives, meilleure série et soirée parfaite (au moins trois victoires).
+  Les records de durée excluent les parties de moins de dix minutes et les abandons précoces
+  déclarés. Ce sont des repères parmi les parties archivées, pas des records Riot exhaustifs.
+- Pentakills, quadrakills, séries et soirées parfaites alimentent les moments de la Mémoire,
+  les badges de match et les éclats personnels. La bande d'accueil sélectionne au plus trois
+  moments présents dans les dix dernières parties à cinq.
+- Les données de multikill absentes restent inconnues, jamais interprétées comme zéro.
+  La couverture multikills/timelines est indiquée dans la Mémoire.
+- Courbe d'écart d'or et horaires des objectifs sur les pages de match et leurs dialogs.
+  Une victoire après au moins 5 000 or de retard **observé dans les relevés** devient un
+  moment « Rien n'était joué ». Sans timeline, aucun retournement n'est inféré.
 
-### V2.5 — Automatisation · en partie déjà disponible
+### V2.5 — Synchronisation · socle livré, collecte réelle à valider
 
 - Ingestion planifiée et indicateur de fraîcheur réutilisés.
-- Webhook Discord, images de partage personnalisées et récapitulatifs automatiques non
-  configurés ni activés.
-- Sauvegarde et test de restauration Railway à réaliser par le propriétaire; aucun
-  déploiement n'a été effectué dans cette mission.
+- `update` et `history` récupèrent au plus dix timelines de matchs Flex à cinq par lot,
+  après les détails et les rangs, seulement en l'absence d'erreurs. Même verrou,
+  client HTTP, limites Riot et budget que la synchronisation existante.
+- V6 stocke seulement l'or par relevé et les objectifs : aucun JSON brut de timeline,
+  inventaire ou position. Une file persistante conserve tentatives, erreur et prochaine
+  reprise. Un 404 est explicitement « indisponible chez Riot »; les autres erreurs
+  échouent le lot avec reprise différée, un 429 arrête les appels de timeline.
+- `sync status` distingue timelines disponibles, absentes et en attente. L'historique
+  n'est terminé que lorsque les deux collectes, les détails et les timelines sont traités.
+- Aucun appel Riot réel ni déploiement effectué pendant cette passe.
+
+## Périmètre retenu après arbitrage
+
+La suite validée est livrée dans cet ordre : moments et records, déroulé des matchs,
+découvertes sobres, courbe de rang. Les travaux qui ne servent pas ces usages sont retirés
+de la V2, pas conservés comme promesses implicites :
+
+- récapitulatif annuel et images de partage;
+- webhook Discord et images Open Graph;
+- découpage par saisons compétitives Riot et tableaux par patch (le patch du match reste visible);
+- comparaison de plusieurs compositions et synergie théorique;
+- dette UX annexe (fond grand écran et repère de menu au scroll).
 
 ## Architecture et données
 
@@ -107,6 +139,9 @@ validées et les fonctionnalités encore reportées sont distingués ci-dessous.
 - La version persistante `data_revision` suit les écritures effectives des données métier,
   même lors d'une ingestion partiellement échouée. Les écritures opérationnelles seules
   (verrou, curseurs, file et statut) ne périment pas les statistiques.
+- V6 ajoute `match_timelines` sans réécrire les lignes existantes. L'arrivée d'un résumé
+  ou le changement de son statut invalide les lectures; une simple tentative différée
+  ne les invalide pas. Réparer un match supprime son ancien résumé pour le recollecter.
 - Les lectures coûteuses utilisent un cache mémoire borné par connexion/version :
   profils, résumés, bilan collectif non filtré, bans, soirées et historique de draft.
   Les résultats restent reconstructibles, les copies indépendantes et les filtres hors
@@ -133,9 +168,10 @@ validées et les fonctionnalités encore reportées sont distingués ci-dessous.
 
 ## API Riot et assets
 
-Sources officielles consultées le 8 novembre 2026 :
+Sources officielles consultées les 8 et 9 novembre 2026 :
 
 - [API Reference](https://developer.riotgames.com/apis)
+- [Définition officielle Match-V5](https://developer.riotgames.com/api-details/match-v5)
 - [League of Legends API policy and documentation](https://developer.riotgames.com/docs/lol)
 - [Developer Portal and product registration](https://developer.riotgames.com/docs/portal)
 - [Game-specific policies](https://developer.riotgames.com/policies/game-specific)
@@ -159,30 +195,42 @@ statiques restent référencés localement. Les emblèmes de rang présents dans
 
 ## Validation et limites restantes
 
-- Après cette passe : `npm run check`, `npm test` et `npm run build`; les routes principales
-  ont été contrôlées en local sur la base existante. Les parcours restent à vérifier
-  visuellement sur desktop et mobile.
+- Après cette passe : `npm run check` sans erreur, 217 tests réussis et build de production
+  validé. Accueil, Mémoire, profil et match contrôlés sur les données locales; courbes
+  et parité page/dialog vérifiées sur une base de test séparée. Captures Chrome desktop
+  et mobile 390 px, sans débordement horizontal sur les parcours vérifiés.
+- La migration locale V5 vers V6 a été contrôlée en comparant l'empreinte complète des
+  lignes de matchs, participants, rangs et file de détails avant/après : aucune modification.
+- Benchmark des parcours enrichis sur 1 000 matchs synthétiques : résultats identiques,
+  cache borné, lectures à chaud entre 33 et 327 fois plus rapides que sans cache
+  (mesure locale de la couche données, pas de la latence web).
 - Base locale après migration : 342 matchs (293 Flex, 49 Solo/Duo), 772 participants et
   61 lineups Flex complets conservés; 608 détails sont en attente et prêts à traiter.
   Aucun backfill, appel Riot réel, snapshot de rang ou déploiement n'a été déclenché.
 - À valider avec la clé et la base de production, sans révéler la clé : `npm run sync -- update`,
   lots `npm run sync -- history`, reprise après interruption/429, endpoint League-V4,
   snapshots et stabilité du volume Railway.
-- À construire ensuite : timelines sélectionnées et extraction d'événements, insights
-  déterministes multi-signaux, saisons compétitives vérifiées, records, récapitulatif
-  annuel, OG personnalisé, partage Discord optionnel et sauvegarde/restauration Railway
-  testée.
+- La collecte réelle des timelines reste à déclencher par `sync update` ou `sync history`.
+  Les états en attente et indisponibles sont affichés explicitement. Les courbes de rang
+  nécessitent deux dates classées; les snapshots existants d'une seule journée ne suffisent pas.
+- Règles des découvertes : premier dragon avec au moins 10 parties dans chacun des deux
+  groupes et 15 points d'écart de taux; nouveau pick joué au moins 5 fois sur les 10 dernières
+  parties, jamais sur les 20 précédentes; pool élargi d'au moins 3 champions sur deux
+  fenêtres consécutives de 20 parties. Ces seuils éditoriaux ne constituent pas des tests
+  de significativité ni des preuves de causalité.
 - Les profils ne sont pas protégés par authentification; ils restent accessibles à toute
   personne qui peut atteindre le site, comme dans l'application existante.
 
 ## Parcours principaux
 
 1. **Accueil** : voir la dernière soirée, la forme collective puis les cinq profils; ouvrir
-   ensuite la chronologie ou préparer une idée de draft.
+   les moments récents, une découverte sourcée ou préparer une idée de draft.
 2. **Mémoire** : comparer les repères d'une année, voir les picks marquants de la période,
-   parcourir les soirées et ouvrir une page permanente de match.
+   retrouver ses records et moments, parcourir les soirées et ouvrir une page permanente
+   de match avec son déroulé lorsqu'il est disponible.
 3. **Profil** : lire les champions et statistiques à cinq, ouvrir une partie pour en voir
-   les détails, puis développer le parcours classé personnel et les snapshots de rang.
+   les détails, retrouver les multikills à cinq et consulter le parcours classé personnel
+   avec les relevés de rang datés.
 4. **Draft** : cliquer un champion sur un ou plusieurs sièges, lire l'historique et les
    synergies observées, recharger une composition déjà jouée puis copier le lien.
 5. **Synchronisation** : lancer `npm run sync -- update` pour les nouveautés; lancer plusieurs fois

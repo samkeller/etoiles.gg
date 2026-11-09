@@ -1,0 +1,36 @@
+---
+import type { Discovery } from '../../lib/stats/insights';
+import type { MatchSummary } from '../../lib/stats/matches';
+import { formatShortDate } from '../../lib/format';
+import ChampionIcon from '../ui/ChampionIcon.astro';
+interface Props { discoveries: readonly Discovery[]; matches: readonly MatchSummary[]; }
+const { discoveries, matches } = Astro.props;
+const byId = new Map(matches.map((match) => [match.id, match]));
+---
+{discoveries.length > 0 && (
+	<section aria-label="Découvertes à cinq">
+		<p class="label-caps text-hextech-300">Dans nos parties à cinq</p>
+		<h2 class="mt-2 font-display text-3xl text-ink">Ce qui se dessine</h2>
+		<div class="mt-5 grid gap-4 lg:grid-cols-3">
+			{discoveries.map((discovery) => (
+				<article class="min-w-0 border-l border-hextech-300/40 bg-night-900/40 p-5">
+					<div class="flex items-center gap-3">
+						{discovery.champion && <ChampionIcon champion={discovery.champion} size="sm" />}
+						<h3 class="font-display text-lg text-ink">{discovery.title}</h3>
+					</div>
+					<p class="mt-3 text-sm leading-relaxed text-ink">{discovery.text}</p>
+					<details class="mt-4 text-xs text-muted">
+						<summary class="focus-ring w-fit cursor-pointer text-hextech-300">{discovery.matchIds.length} parties sources · méthode</summary>
+						<p class="mt-3 leading-relaxed">{discovery.context}</p>
+						<ol class="mt-3 max-h-48 space-y-1 overflow-y-auto">
+							{discovery.matchIds.map((id) => {
+								const match = byId.get(id);
+								return <li><a class="focus-ring block py-1 hover:text-ink" href={`/matches/${id}`}>{match ? `${formatShortDate(match.startedAt)} · ${match.outcome === 'win' ? 'Victoire' : 'Défaite'}` : id}</a></li>;
+							})}
+						</ol>
+					</details>
+				</article>
+			))}
+		</div>
+	</section>
+)}

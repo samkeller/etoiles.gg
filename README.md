@@ -18,10 +18,10 @@ SQLite et propose plusieurs parcours reliés :
 | Route | Parcours |
 | --- | --- |
 | `/` | Accueil éditorial, dernière soirée, forme collective, cinq profils et accès aux parcours |
-| `/history` | Repères collectifs par année, picks marquants, chronologie des soirées et archives partielles séparées |
-| `/players/{puuid}` | Statistiques du joueur dans les matchs à cinq, champions, présences par match; rang personnel secondaire |
+| `/history` | Records, moments et repères collectifs par année, chronologie des soirées et archives partielles séparées |
+| `/players/{puuid}` | Statistiques à cinq, champions, multikills, présences par match; courbe de rang personnelle secondaire |
 | `/draft` | Table de draft à cinq sièges fixes : picks en un clic, historique et synergies observées à cinq, compositions jouées, bans habituels; état partageable via `?picks=` |
-| `/matches/{id}` | URL permanente du récit de match : résultat, patch, composition, statistiques, objectifs et lien externe |
+| `/matches/{id}` | Résultat, patch, composition, moments, objectifs et courbe d'or si la timeline est disponible |
 
 **Périmètres inviolables :** les statistiques collectives et les compositions observées
 ne consomment que les matchs de la file Flex (`queue 440`) où les cinq joueurs sont
@@ -73,6 +73,35 @@ chaque réponse Match-V5 et comparé dans son ordre numérique.
 Les liens externes de match restent League of Graphs. Aucun identifiant OP.GG n'est
 fabriqué à partir d'un Match-V5.
 
+### Moments et découvertes
+
+Les records et les moments ne concernent que les parties Flex à cinq archivées :
+victoire éclair, partie la plus longue, éliminations collectives, séries d'au moins trois
+victoires, soirées parfaites d'au moins trois matchs, pentakills et quadrakills. Les
+records de durée excluent les parties de moins de dix minutes et les abandons précoces
+signalés par Riot. La Mémoire recalcule les records sur l'année choisie; les fiches de
+match et leurs dialogs partagent les mêmes badges. Aucun classement de joueurs n'est ajouté.
+
+Trois types de découvertes, au maximum un de chaque :
+
+- Premier dragon : au moins 10 matchs par groupe (notre premier dragon / celui des
+  adversaires) et au moins 15 points de différence de taux de victoire. Les deux bilans
+  sont affichés. Les matchs sans premier dragon attribuable sont exclus.
+- Nouveau pick : au moins 5 utilisations sur les 10 dernières parties à cinq du joueur,
+  aucune sur les 20 précédentes.
+- Pool élargi : au moins 3 champions supplémentaires entre deux fenêtres consécutives
+  de 20 parties à cinq du joueur.
+
+Chaque découverte donne ses échantillons, sa méthode et les liens vers toutes les parties
+sources. Ces seuils éditoriaux ne sont pas des tests statistiques : association n'est
+pas causalité, diversité n'est pas performance, fréquence n'est pas recommandation.
+Sans résultat admissible, aucun panneau de découverte n'est affiché.
+
+La courbe de rang commence à deux dates classées, utilise les dates réelles et s'interrompt
+sur les jours absents, périodes non classées et remises à zéro des compteurs victoire/défaite.
+Tous les relevés restent lisibles sous le graphique. L'axe représente l'ordre des rangs
+et leurs LP, jamais un MMR ni un score de comparaison entre joueurs.
+
 ## Commandes
 
 | Commande | Action |
@@ -119,6 +148,7 @@ détails de match. Relancer `npm run sync -- history` reprend à la page persist
 recommencer les pages terminées. `npm run sync -- status` permet de voir les files terminées,
 celles restant à parcourir et les détails encore en attente. Le backfill est fini quand les
 curseurs Flex et Solo/Duo sont terminés et qu'aucun match n'attend de détail.
+Les timelines à cinq doivent également être traitées (disponibles ou explicitement absentes).
 
 `npm run sync -- history` conserve ce comportement **un seul lot par défaut**.
 `npm run sync -- history --max-duration 120` répète les lots reprenables pendant un
@@ -146,6 +176,35 @@ comportant des erreurs est enregistré `failed`; une interruption ne détruit ni
 les curseurs déjà persistés.
 Les anciens matchs dont les participants sont incomplets sont aussi remis en file :
 une réparation échouée conserve les données existantes et l'ID à reprendre.
+
+### Timelines compactes
+
+Après les détails et les rangs, un lot sans erreur collecte au plus **10 timelines**
+de matchs Flex à cinq. Aucun appel n'est effectué depuis une page web. La file
+`match_timelines` se remplit à la première synchronisation compatible et se reprend par les
+mêmes commandes `sync update` / `sync history`; `history --max-duration` traite plusieurs
+lots dans son budget existant. `sync status` affiche aussi disponibles, absentes, prêtes,
+différées et prochaine reprise des timelines.
+
+Seuls l'écart d'or des dix participants à chaque relevé et les événements de dragons,
+barons, hérauts, larves, tours et inhibiteurs sont conservés. Le match et les dix PUUIDs
+sont vérifiés avant extraction; les équipes sont résolues par identité, pas par l'ordre
+du tableau. Le JSON brut de timeline, les positions et les inventaires ne sont pas stockés.
+Un objectif dont l'auteur est inconnu reste non attribué.
+
+Un HTTP 404 marque une timeline absente chez Riot sans fabriquer un graphique.
+Les autres erreurs restent visibles dans les logs, font échouer le lot et sont différées
+avec backoff exponentiel (une minute à six heures; base quinze minutes sur 429).
+Un `Retry-After` plus long reste prioritaire, même au-delà de six heures.
+Un 429 arrête immédiatement les appels de timeline du lot. Les requêtes réutilisent
+timeouts/retries et `Retry-After` du client Riot. Un lot déjà en cours peut dépasser
+le budget de programmation, comme pour les détails.
+
+La page de match et le dialog montrent l'écart d'or depuis le point de vue des Étoiles,
+les heures des objectifs et une liste accessible des relevés. Une victoire avec au moins
+5 000 or de retard observé devient un moment de retournement. C'est un maximum parmi
+les relevés Riot (généralement à la minute), pas une mesure continue ni une reconstitution.
+La Mémoire précise la couverture des timelines et des champs de multikill.
 
 Le client HTTP utilise un timeout de 30 secondes pour les appels Riot de collecte et de
 rangs, et au plus trois retries pour les erreurs réseau, 429 et 5xx. Pour les appels Riot, il
@@ -187,6 +246,11 @@ incrémentent sa version par triggers, dans la transaction d'écriture. Les verr
 curseurs, IDs en attente et résultats de runs ne l'incrémentent pas. Une ingestion
 partiellement échouée invalide donc bien les statistiques si elle a importé des données.
 
+V6 ajoute la file et les résumés compacts `match_timelines`. Seuls les changements de statut,
+de résumé, les insertions et suppressions incrémentent la révision; le backoff seul ne
+périme pas les statistiques. Une réparation de match retire son ancien résumé pour le
+recollecter. Aucune ligne historique de match, participant ou rang n'est modifiée par V6.
+
 Pour faire évoluer le schéma : ajouter une migration avec le prochain numéro, mettre à
 jour `SCHEMA_VERSION`, puis tester une base neuve et les anciennes versions concernées.
 Ne pas réécrire une migration déjà utilisée ni ajouter de réparation dans `open.ts`.
@@ -216,7 +280,8 @@ susceptible d'être annulée n'est publiée dans le cache.
 
 `npm run stats:benchmark` compare les parcours de données accueil, profil, mémoire et
 draft sur des fixtures classées de 100, 1 000 et 5 000 matchs (Solo/Duo, Flex à cinq,
-Flex partiel, patches, champions et rangs). Des tailles explicites sont possibles :
+Flex partiel, patches, champions et rangs), moments et découvertes inclus.
+Des tailles explicites sont possibles :
 `npm run stats:benchmark -- 1000 5000`. La commande vérifie l'identité des résultats,
 la limite de payload et un gain à chaud d'au moins 2 fois à partir de 1 000 matchs.
 Elle mesure la couche données, pas le rendu HTML ni la latence HTTP ; les temps absolus
@@ -226,10 +291,10 @@ Mesure locale du 9 novembre 2026 sur 1 000 matchs synthétiques (médianes, en m
 
 | Parcours | Sans cache | Cache chaud |
 | --- | ---: | ---: |
-| Accueil | 164,0 | 13,1 |
-| Profil | 120,7 | 0,7 |
-| Mémoire | 110,5 | 6,4 |
-| Draft | 244,3 | 1,9 |
+| Accueil | 305,7 | 5,0 |
+| Profil | 198,1 | 0,6 |
+| Mémoire | 139,4 | 4,1 |
+| Draft | 184,8 | 1,5 |
 
 Les routes du build ont aussi été vérifiées en HTTP sur une base synthétique séparée :
 réponses identiques à chaud, filtres conservés et renommage externe visible sans

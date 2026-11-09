@@ -1,0 +1,102 @@
+---
+import type { RankSnapshot } from "../../lib/stats/individual";
+import { rankPoints } from "../../lib/stats/ranks";
+import { tierLabel } from "../../lib/lol";
+interface Props {
+	history: readonly RankSnapshot[];
+	queue: string;
+}
+const { history, queue } = Astro.props;
+const points = rankPoints(history);
+const ranked = points.filter((point) => point.value !== null);
+const width = 400;
+const height = 100;
+const min = Math.min(...ranked.map((point) => point.value!));
+const max = Math.max(...ranked.map((point) => point.value!));
+const first = points[0]?.at ?? 0;
+const last = points.at(-1)?.at ?? 0;
+const x = (at: number) =>
+	12 + ((at - first) / (last - first || 1)) * (width - 24);
+const y = (value: number) =>
+	max === min
+		? height / 2
+		: 12 + (1 - (value - min) / (max - min)) * (height - 24);
+const label = (snapshot: RankSnapshot) =>
+	`${snapshot.capturedOn} · ${snapshot.tier ? `${tierLabel(snapshot.tier, snapshot.division)} · ${snapshot.leaguePoints} LP` : "Non classé"}`;
+const endpoints =
+	points.length >= 2 ? [points[0].snapshot, points.at(-1)!.snapshot] : [];
+---
+
+{
+	ranked.length >= 2 && (
+		<div class="mt-4 border-t border-white/10 pt-3">
+			<p class="label-caps text-[0.6rem] text-muted">
+				Évolution · {queue}
+			</p>
+			<>
+				<svg
+					viewBox={`0 0 ${width} ${height}`}
+					class="mt-2 w-full overflow-visible"
+					role="img"
+					aria-label={`Rang ${queue} du ${history[0].capturedOn} au ${history.at(-1)!.capturedOn}. Détails dans les relevés ci-dessous.`}
+				>
+					<line
+						x1="12"
+						x2={width - 12}
+						y1={height / 2}
+						y2={height / 2}
+						class="stroke-white/10"
+						stroke-dasharray="3 4"
+					/>
+					{points.map((point, index) => {
+						const previous = points[index - 1];
+						return (
+							point.value !== null && (
+								<>
+									{previous?.value !== null &&
+										previous !== undefined &&
+										!point.breakBefore && (
+											<line
+												x1={x(previous.at)}
+												y1={y(previous.value!)}
+												x2={x(point.at)}
+												y2={y(point.value)}
+												class="stroke-hextech-300"
+												stroke-width="2"
+												vector-effect="non-scaling-stroke"
+											/>
+										)}
+									<circle
+										cx={x(point.at)}
+										cy={y(point.value)}
+										r="3"
+										class="fill-hextech-300"
+									>
+										<title>{label(point.snapshot)}</title>
+									</circle>
+								</>
+							)
+						);
+					})}
+				</svg>
+				<div class="flex justify-between gap-2 text-[0.65rem] tabular-nums text-muted">
+					<time datetime={history[0].capturedOn}>
+						{history[0].capturedOn}
+					</time>
+					<time datetime={history.at(-1)!.capturedOn}>
+						{history.at(-1)!.capturedOn}
+					</time>
+				</div>
+				<div class="mt-1 flex justify-between gap-3 text-xs tabular-nums text-ink">
+					{endpoints.map((snapshot) => (
+						<span data-tip={label(snapshot)}>
+							{snapshot.tier
+								? `${tierLabel(snapshot.tier, snapshot.division)} · ${snapshot.leaguePoints} LP`
+								: "Non classé"}
+						</span>
+					))}
+				</div>
+			</>
+		</div>
+	)
+}

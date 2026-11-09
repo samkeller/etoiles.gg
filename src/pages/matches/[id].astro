@@ -5,7 +5,7 @@ import Panel from '../../components/ui/Panel.astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { db } from '../../lib/db/db';
 import { formatDate } from '../../lib/format';
-import { getMatchDetail } from '../../lib/stats';
+import { getMatchDetail, getMatchMoments, getMatchTimeline } from '../../lib/stats';
 
 export const prerender = false;
 
@@ -13,6 +13,7 @@ const id = Astro.params.id ?? '';
 const match = getMatchDetail(db, id);
 if (!match) return new Response('Match introuvable.', { status: 404 });
 const result = match.outcome === 'win' ? 'Victoire' : 'Défaite';
+const fullTeam = match.queueId === 440 && match.lineupSize === 5;
 ---
 
 <BaseLayout title={`${result} · ${formatDate(match.startedAt)} — etoiles.win`} description={`Le récit de notre match du ${formatDate(match.startedAt)} : composition, statistiques, objectifs et patch ${match.patch}.`}>
@@ -25,13 +26,9 @@ const result = match.outcome === 'win' ? 'Victoire' : 'Défaite';
 		<header class="max-w-3xl">
 			<p class="label-caps text-sky-300">{match.queueId === 420 ? 'Solo/Duo classée' : 'Classé flexible'} · patch {match.patch}</p>
 			<h1 class="mt-3 font-display text-4xl text-ink sm:text-5xl">{result} · {formatDate(match.startedAt)}</h1>
-			<p class="mt-4 text-sm leading-relaxed text-muted">
-				Une partie de l’histoire des Étoiles. Les statistiques collectives ne retiennent ce match que si les cinq joueurs étaient réunis en Flex.
-			</p>
 		</header>
 		<Panel class="p-4 sm:p-8">
-			<MatchDetail detail={match} titleId="match-result" />
+			<MatchDetail detail={match} titleId="match-result" moments={fullTeam ? getMatchMoments(db, id) : []} timeline={fullTeam ? getMatchTimeline(db, id) : undefined} />
 		</Panel>
 	</main>
 </BaseLayout>
-import OpggIcon from '../../components/ui/OpggIcon.astro';

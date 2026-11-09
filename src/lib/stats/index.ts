@@ -7,4 +7,7 @@ export * from './sessions';
 export * from './draft';
 export * from './bans';
 export * from './read-model';
+export * from './moments';
+export * from './timelines';
+export * from './insights';
 export type { MatchOutcome } from './shared';

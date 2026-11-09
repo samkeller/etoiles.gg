@@ -21,6 +21,8 @@ Consult these guides before working on related tasks:
 - [Adding styles or using Tailwind](https://docs.astro.build/en/guides/styling/)
 - [Supporting multiple languages](https://docs.astro.build/en/guides/internationalization/)
 
+Important: If you need icons or assets, asks them ! The designer is more than happy to get them from tabler.io !! That goes for any assets or external resources you might require.
+
 ## TODO_agents.md
 Il existe deux fichiers de suivi distincts :
 

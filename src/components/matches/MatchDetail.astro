@@ -15,13 +15,18 @@ import UiIcon from "../ui/UiIcon.astro";
 import SummonerSpell from '../ui/SummonerSpell.astro';
 import StarPresence from '../ui/StarPresence.astro';
 import OpggIcon from '../ui/OpggIcon.astro';
+import MatchTimeline from './MatchTimeline.astro';
+import type { TimelineState } from '../../lib/stats/timelines';
+import type { TeamMoment } from '../../lib/stats/moments';
 
 interface Props {
 	detail: MatchDetail;
 	titleId: string;
+	moments?: TeamMoment[];
+	timeline?: TimelineState;
 }
 
-const { detail, titleId } = Astro.props;
+const { detail, titleId, moments = [], timeline } = Astro.props;
 const isWin = detail.outcome === "win";
 const maxDamage = Math.max(
 	...detail.teams.flatMap((team) =>
@@ -104,6 +109,13 @@ const objectives: {
 			League of Graphs <OpggIcon name="ui-arrow-right" class="size-3 -rotate-45" />
 		</a>
 	</header>
+	{moments.length > 0 && <ul aria-label="Moments marquants du match" class="flex flex-wrap gap-2">
+		{moments.map((moment) => <li class="flex items-center gap-2 border border-gold-300/30 bg-gold-200/5 px-3 py-2 text-xs text-gold-100"
+			data-tip={moment.matchIds.length > 1 ? `Cette partie fait partie d’une série de ${moment.matchIds.length} matchs à cinq.` : undefined}>
+			{moment.champion && <ChampionIcon champion={moment.champion} size="sm" />}
+			<span>{moment.title}<span class="ml-2 text-muted">{moment.value}</span></span>
+		</li>)}
+	</ul>}
 
 	{
 		detail.teams.map((team) => (
@@ -255,4 +267,5 @@ const objectives: {
 			</section>
 		))
 	}
+	{timeline && <MatchTimeline timeline={timeline} />}
 </article>

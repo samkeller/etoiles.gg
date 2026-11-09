@@ -14,6 +14,7 @@ history: one resumable batch by default; --max-duration repeats batches within a
 positive scheduling budget in seconds (maximum 86400). An in-flight Riot request
 can finish after the budget; existing HTTP timeouts/retries remain unchanged.
 No waiting between batches: failures or deferred-only work stop the command.
+Each batch also collects up to 10 compact timelines for five-player Flex matches.
 status/help do not require a Riot API key.`;
 
 export type SyncCommand =
@@ -98,17 +99,28 @@ export function readSyncStatus(database: Database.Database, queues: readonly num
 			nextStart: number | null; isComplete: number | null;
 		}[];
 	const cursors = rows.filter((row) => queues.includes(row.queueId));
+	const timelines = database.prepare(`SELECT
+		COUNT(CASE WHEN status = 'pending' THEN 1 END) AS pending,
+		COUNT(CASE WHEN status = 'pending' AND next_attempt_at <= ? THEN 1 END) AS ready,
+		COUNT(CASE WHEN status = 'ready' THEN 1 END) AS collected,
+		COUNT(CASE WHEN status = 'unavailable' THEN 1 END) AS unavailable,
+		MIN(CASE WHEN status = 'pending' AND next_attempt_at > ? THEN next_attempt_at END) AS nextRetryAt
+		FROM match_timelines`).get(now, now) as {
+			pending: number; ready: number; collected: number; unavailable: number; nextRetryAt: number | null;
+		};
 	const collectionComplete = cursors.length > 0 && cursors.every((row) => row.isComplete === 1);
 	return {
 		pendingRemaining: pending.count, pendingReady: pending.ready,
 		pendingDeferred: pending.count - pending.ready, nextRetryAt: pending.nextRetry,
-		cursors, collectionComplete, historyComplete: collectionComplete && pending.count === 0,
+		cursors, timelines, collectionComplete, historyComplete: collectionComplete && pending.count === 0 && timelines.pending === 0,
 	};
 }
 
 export function formatSyncStatus(status: ReturnType<typeof readSyncStatus>): string[] {
 	const lines = [`File d’attente : ${status.pendingRemaining} matchs · ${status.pendingReady} prêts · ${status.pendingDeferred} différés.`];
 	if (status.nextRetryAt !== null) lines.push(`Prochaine reprise différée : ${new Date(status.nextRetryAt).toISOString()}`);
+	lines.push(`Timelines à cinq : ${status.timelines.collected} disponibles · ${status.timelines.unavailable} absentes chez Riot · ${status.timelines.pending} en attente (${status.timelines.ready} prêtes).`);
+	if (status.timelines.nextRetryAt !== null) lines.push(`Reprise timelines : ${new Date(status.timelines.nextRetryAt).toISOString()}`);
 	for (const row of status.cursors) {
 		const state = row.isComplete === 1 ? 'collecte terminée' :
 			row.nextStart === null ? 'à démarrer' : `reprendra à l’offset ${row.nextStart}`;
@@ -116,8 +128,8 @@ export function formatSyncStatus(status: ReturnType<typeof readSyncStatus>): str
 	}
 	if (!status.cursors.length) lines.push('Aucun joueur enregistré. Prochaine action : npm run sync -- setup "Name#TAG".');
 	else if (status.historyComplete) lines.push('Historique terminé. Prochaine action : npm run sync -- update.');
-	else if (status.collectionComplete && !status.pendingReady) {
-		lines.push('Historique incomplet : détails différés. Attendre la reprise indiquée, puis npm run sync -- history.');
+	else if (status.collectionComplete && !status.pendingReady && !status.timelines.ready) {
+		lines.push('Historique incomplet : détails ou timelines différés. Attendre la reprise indiquée, puis npm run sync -- history.');
 	} else lines.push('Historique incomplet. Prochaine action : npm run sync -- history.');
 	return lines;
 }
@@ -128,7 +140,8 @@ export function formatIngestSummary(result: IngestResult, backfill: boolean): st
 	return `${backfill ? 'Lot historique' : 'Lot incrémental'} ${result.failures.length ? 'en échec' : result.budgetExhausted ? 'interrompu par le budget' : 'réussi'} : ` +
 		`${result.importedByQueue[440]} imports Flex, ${result.importedByQueue[420]} imports Solo/Duo, ` +
 		`${result.newMatches} nouveaux matchs Flex à cinq, ${result.existingMatches} déjà présents, ` +
-		`${result.repairedMatches} réparés, ${result.failures.length} échecs.`;
+		`${result.repairedMatches} réparés, ${result.timelinesCollected} timelines, ` +
+		`${result.timelinesUnavailable} timelines absentes chez Riot, ${result.failures.length} échecs.`;
 }
 
 export async function runHistory(
@@ -156,7 +169,7 @@ export async function runHistory(
 		if (after.historyComplete) { stopReason = 'complete'; break; }
 		if (result.budgetExhausted || (deadlineAt !== undefined && Date.now() >= deadlineAt)) { stopReason = 'budget'; break; }
 		if (deadlineAt === undefined) break;
-		if (after.collectionComplete && !after.pendingReady) { stopReason = 'deferred'; break; }
+		if (after.collectionComplete && !after.pendingReady && !after.timelines.ready) { stopReason = 'deferred'; break; }
 		if (JSON.stringify(before) === JSON.stringify(after)) { stopReason = 'no-progress'; break; }
 	}
 	return { batches, failures, stopReason, status: readSyncStatus(database, queues) };

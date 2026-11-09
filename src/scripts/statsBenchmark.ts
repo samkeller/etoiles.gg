@@ -3,7 +3,7 @@ import { strict as assert } from 'node:assert';
 import type Database from 'better-sqlite3';
 import { closeTestDatabases, createTestDatabase, seedRankedHistory } from '../lib/stats/fixtures';
 import { clearReadCache, MAX_READ_CACHE_CHARACTERS, readCacheMetrics } from '../lib/stats/cache';
-import { getCollective, getDraftHistory, getIndividualProfiles, getMatches, getOverview, getPlayers, getSessionHistory, getTeamBans } from '../lib/stats';
+import { getCollective, getDraftHistory, getIndividualProfiles, getMatches, getOverview, getPlayers, getSessionHistory, getTeamBans, getTeamStories, getDiscoveries } from '../lib/stats';
 
 const paths: Record<string, (database: Database.Database) => unknown> = {
 	accueil: (database) => ({
@@ -13,15 +13,20 @@ const paths: Record<string, (database: Database.Database) => unknown> = {
 		partial: getMatches(database, 'partial'),
 		sessions: getSessionHistory(database),
 		collective: getCollective(database),
+		stories: getTeamStories(database),
+		discoveries: getDiscoveries(database),
 	}),
 	profil: (database) => ({
 		personal: getIndividualProfiles(database).find((player) => player.puuid === 'player-0'),
 		team: getPlayers(database).find((player) => player.puuid === 'player-0'),
+		moments: getTeamStories(database).events.filter((moment) => moment.puuid === 'player-0'),
+		discoveries: getDiscoveries(database).filter((discovery) => discovery.puuid === 'player-0'),
 	}),
 	memoire: (database) => ({
 		full: getMatches(database),
 		partial: getMatches(database, 'partial'),
 		sessions: getSessionHistory(database),
+		stories: getTeamStories(database),
 	}),
 	draft: (database) => ({
 		personal: getIndividualProfiles(database),

@@ -12,10 +12,13 @@ import RoleIcon from '../../components/ui/RoleIcon.astro';
 import SegmentedNav from '../../components/ui/SegmentedNav.astro';
 import StarPresence from '../../components/ui/StarPresence.astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import MomentList from '../../components/memory/MomentList.astro';
+import RankProgress from '../../components/players/RankProgress.astro';
+import Discoveries from '../../components/collective/Discoveries.astro';
 import { db } from '../../lib/db/db';
 import { formatDecimal, formatKda, formatPercent, formatSince, formatShortDate, pluralize } from '../../lib/format';
 import { championName, profileIcon, roleLabel, tierLabel } from '../../lib/lol';
-import { getIndividualProfiles, getPlayers, MIN_DRAFT_GAMES, type RankedMatch } from '../../lib/stats';
+import { getIndividualProfiles, getPlayers, getTeamStories, getDiscoveries, getMatches, MIN_DRAFT_GAMES, type RankedMatch } from '../../lib/stats';
 
 export const prerender = false;
 
@@ -74,6 +77,8 @@ const mainStat = teamProfile?.mainRole === 'UTILITY'
 	: { label: 'CS / min', value: teamProfile?.csPerMinute ?? null };
 const presenceTip = (match: RankedMatch) =>
 	match.queue === 'flex' && match.teamSize >= 5 ? 'Comptée dans les bilans collectifs' : undefined;
+const moments = getTeamStories(db).events.filter((moment) => moment.puuid === puuid);
+const discoveries = getDiscoveries(db).filter((discovery) => discovery.puuid === puuid);
 ---
 
 <BaseLayout title={`${profile.name} — etoiles.win`} description={`Les champions, les parties à cinq et le parcours classé de ${profile.name}.`}>
@@ -183,6 +188,16 @@ const presenceTip = (match: RankedMatch) =>
 								<OpggIcon name="ui-arrow-right" class="size-3 text-gold-200 transition-transform group-hover:translate-x-1" />
 							</a>
 						)}
+						{moments.length > 0 && (
+							<div class="mt-8">
+								<h3 class="mb-4 font-display text-xl text-ink">Ses éclats à cinq</h3>
+								<MomentList moments={moments.slice(0, 4)} label="Multikills du joueur à cinq" />
+								{moments.length > 4 && <details class="mt-3">
+									<summary class="focus-ring w-fit cursor-pointer text-xs text-hextech-300">{moments.length - 4} autres éclats</summary>
+									<div class="mt-3"><MomentList moments={moments.slice(4)} label="Autres multikills à cinq" /></div>
+								</details>}
+							</div>
+						)}
 					</>
 				) : (
 					<Panel class="mt-5 p-5 sm:p-7">
@@ -223,19 +238,11 @@ const presenceTip = (match: RankedMatch) =>
 									))}
 								</ul>
 							)}
-							{activity.rankHistory.length > 1 && (
-								<ol class="mt-4 flex flex-wrap gap-1.5 border-t border-white/10 pt-3" aria-label={`Relevés de rang ${label}`}>
-									{activity.rankHistory.slice(-6).map((snapshot) => (
-										<li class="inline-flex items-center gap-1.5 border border-white/10 px-1.5 py-0.5 text-[0.65rem] text-muted">
-											<RankEmblem queue={label} rank={snapshot} size="sm" class="size-5" />
-											<time datetime={snapshot.capturedOn}>{snapshot.capturedOn.slice(5).split('-').reverse().join('/')}</time>
-										</li>
-									))}
-								</ol>
-							)}
+							<RankProgress history={activity.rankHistory} queue={label} />
 						</Panel>
 					))}
 				</div>
+				<Discoveries discoveries={discoveries} matches={discoveries.length ? getMatches(db) : []} />
 			</aside>
 		</div>
 

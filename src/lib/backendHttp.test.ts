@@ -1,11 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { RateLimitError, request } from './backendHttp';
-import { getFlexMatchIds, getMatch, getPuuid, getRankEntries, parseRiotId, riotHeaders } from './riot';
+import { deferredRetryDelay, RateLimitError, request } from './backendHttp';
+import { getFlexMatchIds, getMatch, getPuuid, getRankEntries, getTimeline, parseRiotId, riotHeaders } from './riot';
 import { addMatch, closeTestDatabases, createTestDatabase, fullLineup } from './stats/fixtures';
 
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); closeTestDatabases(); });
 
 describe('bounded HTTP requests', () => {
+	it('preserves long Retry-After delays for durable retries even when the request retry budget is exhausted', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 429, headers: { 'retry-after': '86400' } })));
+		await expect(request('https://example.test', { maxRetries: 0 })).rejects.toMatchObject({ retryAfterMs: 86400000 });
+		expect(deferredRetryDelay(new RateLimitError('HTTP 429', 86400000), 0)).toBe(86400000);
+		expect(deferredRetryDelay(new Error('503'), 10)).toBeLessThanOrEqual(6 * 60 * 60_000);
+	});
 	it('respects Retry-After within its wait budget and eventually succeeds', async () => {
 		const fetch = vi.fn().mockResolvedValueOnce(new Response('', { status: 429, headers: { 'retry-after': '2' } }))
 			.mockResolvedValueOnce(new Response('[]'));
@@ -79,6 +85,18 @@ describe('bounded HTTP requests', () => {
 });
 
 describe('Riot replies and validation', () => {
+	it('treats only timeline 404 as unavailable, never authentication failures', async () => {
+		vi.stubEnv('RIOT_API_KEY', 'RGAPI-00000000-0000-0000-0000-000000000000');
+		const fetch = vi.fn().mockResolvedValueOnce(new Response('', { status: 404 }))
+			.mockResolvedValueOnce(new Response('', { status: 403 })).mockResolvedValueOnce(Response.json({ info: {} }));
+		vi.stubGlobal('fetch', fetch);
+		expect(await getTimeline('EUW1_1')).toBeNull();
+		expect(fetch.mock.calls[0][0]).toBe('https://europe.api.riotgames.com/lol/match/v5/matches/EUW1_1/timeline');
+		await expect(getTimeline('EUW1_1')).rejects.toThrow('HTTP 403');
+		expect(await getTimeline('EUW1_1')).toEqual({ info: {} });
+		await expect(getTimeline('../bad')).rejects.toThrow('Invalid match ID');
+		expect(fetch).toHaveBeenCalledTimes(3);
+	});
 	it('validates keys and Riot IDs before sending requests', async () => {
 		vi.stubEnv('RIOT_API_KEY', '');
 		const fetch = vi.fn();

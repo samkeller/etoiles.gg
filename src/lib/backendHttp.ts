@@ -6,7 +6,18 @@ export interface RequestOptions {
 	sleep?: (ms: number) => Promise<void>;
 }
 
-export class RateLimitError extends Error {}
+export class RateLimitError extends Error {
+	constructor(message: string, public readonly retryAfterMs?: number) { super(message); }
+}
+export class HttpError extends Error {
+	constructor(public readonly status: number, message: string) { super(message); }
+}
+
+export function deferredRetryDelay(error: unknown, attempts: number): number {
+	const base = error instanceof RateLimitError ? 15 * 60_000 : 60_000;
+	const backoff = Math.min(base * 2 ** Math.min(attempts, 8), 6 * 60 * 60_000);
+	return Math.max(backoff, error instanceof RateLimitError ? error.retryAfterMs ?? 0 : 0);
+}
 
 /** Retry transient errors only; a request can never wait indefinitely. */
 export async function request(url: string, options: RequestOptions = {}): Promise<Response> {
@@ -22,18 +33,19 @@ export async function request(url: string, options: RequestOptions = {}): Promis
 			continue;
 		}
 		if (response.ok) return response;
-		if (attempt >= maxRetries || (response.status !== 429 && response.status < 500)) {
-			const message = `HTTP ${response.status} for ${new URL(url).pathname}`;
-			if (response.status === 429) throw new RateLimitError(message);
-			throw new Error(message);
-		}
 		const retryAfter = response.headers.get('retry-after');
 		const seconds = retryAfter === null ? NaN : Number(retryAfter);
 		const delay = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(retryAfter ?? '') - Date.now();
+		const retryAfterMs = Number.isFinite(delay) ? Math.max(0, delay) : undefined;
+		if (attempt >= maxRetries || (response.status !== 429 && response.status < 500)) {
+			const message = `HTTP ${response.status} for ${new URL(url).pathname}`;
+			if (response.status === 429) throw new RateLimitError(message, retryAfterMs);
+			throw new HttpError(response.status, message);
+		}
 		await response.body?.cancel();
 		if (Number.isFinite(delay) && delay > maxRetryAfterMs) {
 			const message = `HTTP ${response.status}: Retry-After ${Math.ceil(delay / 1000)}s exceeds the ${maxRetryAfterMs / 1000}s wait limit`;
-			if (response.status === 429) throw new RateLimitError(message);
+			if (response.status === 429) throw new RateLimitError(message, retryAfterMs);
 			throw new Error(message);
 		}
 		await sleep(Math.max(0, Math.min(Number.isFinite(delay) ? delay : 1000 * 2 ** attempt, maxRetryAfterMs)));

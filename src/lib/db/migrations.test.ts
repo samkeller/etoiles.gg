@@ -7,6 +7,7 @@ import { addMatch, addPlayer, fullLineup } from '../stats/fixtures';
 let database: Database.Database | undefined;
 
 function removeRevisionTracking(database: Database.Database): void {
+	database.exec('DROP TABLE match_timelines');
 	const triggers = database.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger'").all() as { name: string }[];
 	for (const { name } of triggers) database.exec(`DROP TRIGGER "${name}"`);
 	database.exec('DROP TABLE data_revision');
@@ -105,6 +106,34 @@ describe('database migrations', () => {
 		expect(database.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION);
 		expect(database.prepare('SELECT version FROM data_revision').get()).toEqual({ version: 0 });
 		expect(database.prepare('SELECT COUNT(*) AS count FROM matches').get()).toEqual({ count: 0 });
+	});
+
+	it('upgrades V5 without changing matches, ranks or operational state and tracks timeline data separately', () => {
+		database = new Database(':memory:');
+		migrateDatabase(database);
+		database.exec('DROP TABLE match_timelines');
+		database.pragma('user_version = 5');
+		addPlayer(database, 'player-0', 'Étoile');
+		addMatch(database, { id: 'EUW1_123', startedAt: 123, won: true, members: fullLineup() });
+		database.exec(`INSERT INTO rank_snapshots VALUES ('player-0', 'RANKED_FLEX_SR', '2026-11-09', 'GOLD', 'I', 20, 10, 4);
+			INSERT INTO ingest_pending VALUES ('EUW1_999', 2, 5000)`);
+		const before = ['matches', 'participants', 'rank_snapshots', 'ingest_pending']
+			.map((table) => database!.prepare(`SELECT * FROM ${table}`).all());
+		migrateDatabase(database);
+		migrateDatabase(database);
+		for (const [index, table] of ['matches', 'participants', 'rank_snapshots', 'ingest_pending'].entries()) {
+			expect(database.prepare(`SELECT * FROM ${table}`).all()).toEqual(before[index]);
+		}
+		const version = () => (database!.prepare('SELECT version FROM data_revision').get() as { version: number }).version;
+		const base = version();
+		database.exec("INSERT INTO match_timelines (match_id, updated_at) VALUES ('EUW1_123', 0)");
+		expect(version()).toBe(base + 1);
+		database.exec("UPDATE match_timelines SET attempts = 1, next_attempt_at = 1000, last_error = '503', updated_at = 1");
+		expect(version()).toBe(base + 1);
+		database.exec("UPDATE match_timelines SET status = 'unavailable'");
+		expect(version()).toBe(base + 2);
+		database.exec('DELETE FROM match_timelines');
+		expect(version()).toBe(base + 3);
 	});
 
 	it('rejects future versions without modifying the database', () => {
