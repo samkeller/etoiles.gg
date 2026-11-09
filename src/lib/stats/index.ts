@@ -6,4 +6,5 @@ export * from './individual';
 export * from './sessions';
 export * from './draft';
 export * from './bans';
+export * from './read-model';
 export type { MatchOutcome } from './shared';

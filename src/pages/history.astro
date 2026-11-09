@@ -7,7 +7,7 @@ import Panel from '../components/ui/Panel.astro';
 import SegmentedNav from '../components/ui/SegmentedNav.astro';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { db } from '../lib/db/db';
-import { getMatches, getTeamSessions, MIN_DRAFT_GAMES } from '../lib/stats';
+import { getMatches, getSessionHistory, MIN_DRAFT_GAMES } from '../lib/stats';
 import { formatDate, formatPercent, pluralize } from '../lib/format';
 import { championId } from '../lib/lol';
 import { TEAM_NAME } from '../lib/site';
@@ -16,7 +16,7 @@ const CHAMPION_LIMIT = 10;
 
 const fullMatches = getMatches(db, 'full');
 const partialMatches = getMatches(db, 'partial');
-const allSessions = getTeamSessions(fullMatches);
+const allSessions = getSessionHistory(db);
 const years = [...new Set(allSessions.map((session) => session.dateKey.slice(0, 4)))];
 const requestedYear = Astro.url.searchParams.get('year') ?? 'all';
 const selectedYear = requestedYear === 'all' || years.includes(requestedYear) ? requestedYear : 'all';

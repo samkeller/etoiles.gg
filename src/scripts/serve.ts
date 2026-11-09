@@ -56,7 +56,7 @@ process.on('SIGINT', () => shutdown(0));
 function runIngestion(): Promise<void> {
 	return new Promise((resolve, reject) => {
 		log.info('Scheduled ingestion started');
-		ingestion = spawn(process.execPath, ['--import', 'tsx', 'src/scripts/ingest.ts'], { stdio: 'inherit' });
+		ingestion = spawn(process.execPath, ['--import', 'tsx', 'src/scripts/sync.ts', 'update'], { stdio: 'inherit' });
 		ingestion.on('error', reject);
 		ingestion.on('exit', (code, signal) => {
 			ingestion = undefined;

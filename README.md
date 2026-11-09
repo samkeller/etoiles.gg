@@ -83,11 +83,30 @@ fabriqué à partir d'un Match-V5.
 | `npm run build` | Construit le site de production |
 | `npm start` | Démarre le serveur Node de production et le planificateur opt-in |
 | `npm run preview` | Prévisualise le build |
-| `npm run ingest` | Synchronise les nouveautés Flex, Solo/Duo et les rangs du jour |
-| `npm run ingest:backfill` | Commence ou reprend le backfill historique classé par lots |
-| `npm run ingest:status` | Affiche la file en attente et l’avancement des curseurs de backfill |
-| `npm run resolvePuids -- "Pseudo#TAG"` | Résout le PUUID d'un joueur via son Riot ID et l'enregistre en base |
+| `npm run sync -- help` | Affiche les commandes et options de synchronisation |
+| `npm run sync -- setup "Pseudo#TAG"` | Résout et enregistre les joueurs explicites, sinon ceux de `PLAYERS` |
+| `npm run sync -- update` | Synchronise les nouveautés Flex, Solo/Duo et les rangs du jour |
+| `npm run sync -- history [--max-duration SECONDES]` | Reprend un lot historique, ou plusieurs dans un budget explicite en secondes |
+| `npm run sync -- status` | Affiche la file prête/différée, les curseurs et la prochaine action |
 | `npm run syncAssets` | Télécharge les icônes de profil et de champions (Data Dragon) et génère les noms FR des champions |
+| `npm run stats:benchmark` | Compare les lectures sans cache, à froid et à chaud sur des historiques synthétiques |
+
+`sync` est l'unique CLI de données, utilisée aussi par le planificateur. Pour initialiser la base :
+
+```sh
+npm run sync -- setup "Joueur 1#EUW" "Joueur 2#EUW"
+npm run sync -- history
+npm run sync -- status
+npm run sync -- update
+```
+
+`setup` accepte plusieurs Riot IDs explicites; sinon il lit
+`PLAYERS`, séparé par des virgules. Les arguments remplacent cette variable, sans
+supprimer les joueurs déjà enregistrés. Tous les IDs sont validés avant le premier
+appel Riot; une liste vide, un ID mal formé ou une option inconnue échoue explicitement.
+En cas d'échec réseau pendant le setup, les identités déjà résolues sont conservées et
+le message précise le nombre enregistré. Le planificateur exige toujours cinq joueurs.
+`status` et l'aide ne nécessitent pas de clé Riot.
 
 ## Fiabilité de la synchronisation
 
@@ -96,10 +115,28 @@ L'ingestion incrémentale utilise une fenêtre initiale de 24 heures puis un che
 Le backfill explicite possède des curseurs de page indépendants pour chaque joueur et file;
 chaque page de 100 IDs et son curseur sont enregistrés ensemble dans une transaction.
 Chaque exécution backfill lit au plus deux pages par joueur/file et traite au plus 100
-détails de match. Relancer `npm run ingest:backfill` reprend à la page persistée, sans
-recommencer les pages terminées. `npm run ingest:status` permet de voir les files terminées,
+détails de match. Relancer `npm run sync -- history` reprend à la page persistée, sans
+recommencer les pages terminées. `npm run sync -- status` permet de voir les files terminées,
 celles restant à parcourir et les détails encore en attente. Le backfill est fini quand les
 curseurs Flex et Solo/Duo sont terminés et qu'aucun match n'attend de détail.
+
+`npm run sync -- history` conserve ce comportement **un seul lot par défaut**.
+`npm run sync -- history --max-duration 120` répète les lots reprenables pendant un
+budget de programmation de **120 secondes** (nombre positif, maximum 86400 secondes).
+Le budget est vérifié entre lots et avant chaque nouvel appel Riot; l'appel déjà en
+cours peut dépasser cette durée avec ses timeouts/retries HTTP existants. Ce n'est
+donc pas une limite stricte de temps mural. Aucun délai ni retry supplémentaire n'est
+ajouté par la CLI : elle s'arrête dès un échec (notamment 429), lorsque seuls des détails
+différés restent, ou si la progression cesse. Les pages et IDs persistés sont repris
+au prochain lancement; ne pas relancer en boucle pendant une pause Riot.
+
+Le bilan distingue les imports nouveaux Flex (`440`) et Solo/Duo (`420`), les nouveaux
+matchs Flex à cinq, les matchs déjà présents, les réparations et les échecs. Les réparations
+sont comptées séparément des imports nouveaux. La file indique les détails prêts et
+différés ainsi que la prochaine reprise connue. **Un lot réussi ne signifie pas que
+l'historique est terminé** : seul le statut des deux files de chaque joueur et une file
+de détails vide l'attestent. Une limite de budget ou un lot encore incomplet sans erreur
+retourne 0; une erreur retourne 1 avec un message visible même avec `LOG_LEVEL=silent`.
 
 Les IDs à traiter restent dans `ingest_pending`; chaque match et ses participants sont
 écrits dans une transaction. Une erreur laisse l'ID en file, enregistre son nombre de
@@ -115,8 +152,8 @@ rangs, et au plus trois retries pour les erreurs réseau, 429 et 5xx. Pour les a
 respecte `Retry-After` jusqu'à cinq minutes par attente ; un backfill peut donc prendre
 du temps. Si cette limite ou le nombre de
 retries est dépassé sur un 429, le run s'arrête en échec sans multiplier les appels :
-les IDs et pages déjà collectés restent persistés. Relancer `npm run ingest:backfill`
-après la pause indiquée par `npm run ingest:status` reprend la collecte. La clé Riot et les IDs sont
+les IDs et pages déjà collectés restent persistés. Relancer `npm run sync -- history`
+après la pause indiquée par `npm run sync -- status` reprend la collecte. La clé Riot et les IDs sont
 validés avant les appels. Les assets sont vérifiés avant écriture (réponse HTTP et
 signature PNG), remplacés atomiquement, et une
 synchronisation partielle ne se présente pas comme une réussite.
@@ -135,12 +172,82 @@ La base SQLite est stockée dans `./etoiles.db` par défaut (chemin configurable
 `DATABASE_PATH`), fichier ignoré par Git.
 
 Le schéma SQL de base est défini dans `src/lib/db/schema.ts`; les évolutions additives,
-versionnées et transactionnelles sont dans `src/lib/db/migrations.ts`. Les migrations V1
-à V3 ajoutent les curseurs Solo/Duo, snapshots de rang et curseurs de backfill reprenables
+versionnées et transactionnelles sont dans `src/lib/db/migrations.ts`, seul chemin de
+création et d'évolution de la base. `schema.ts` conserve le socle historique, appliqué par
+la première migration ; `open.ts` configure SQLite sans modifier le schéma à part.
+Les migrations V1 à V3 ajoutent les curseurs Solo/Duo, snapshots de rang et curseurs de backfill reprenables
 sans supprimer les données existantes. V3 complète aussi les colonnes de reprise des bases
 déjà marquées V2 lorsque ces colonnes sont absentes.
 Un snapshot par joueur, file et jour UTC est écrit lors de l'ingestion; les rangs absents
 sont conservés comme « non classé », et aucun historique antérieur n'est inventé.
+
+V4 centralise la mise à niveau de `ingest_runs.finished_at`. V5 ajoute `data_revision` :
+les modifications effectives des joueurs, matchs, participants et snapshots de rang
+incrémentent sa version par triggers, dans la transaction d'écriture. Les verrous,
+curseurs, IDs en attente et résultats de runs ne l'incrémentent pas. Une ingestion
+partiellement échouée invalide donc bien les statistiques si elle a importé des données.
+
+Pour faire évoluer le schéma : ajouter une migration avec le prochain numéro, mettre à
+jour `SCHEMA_VERSION`, puis tester une base neuve et les anciennes versions concernées.
+Ne pas réécrire une migration déjà utilisée ni ajouter de réparation dans `open.ts`.
+Si une nouvelle table ou colonne influence les statistiques, adapter aussi les triggers
+de révision dans cette nouvelle migration. Une base plus récente que le code est refusée
+avant toute modification ; une migration échouée est annulée sans avancer sa version.
+
+### Lectures et cache des statistiques
+
+SQLite et les réponses Riot restent la source de vérité. Les profils, résumés de matchs,
+bans, bilan collectif non filtré, soirées et historique de draft sont calculés à la demande
+et mis en cache en mémoire, par connexion et version des données. Chaque lecture vérifie
+la version dans une transaction de lecture cohérente : une CLI distincte du serveur est
+donc détectée à la consultation suivante, sans délai d'expiration arbitraire.
+
+Le cache conserve au plus 16 entrées et 16 millions de caractères JSON (16 Mi caractères,
+soit au plus environ 32 MiB de contenu UTF-16, hors surcoûts du runtime). Les entrées les
+moins récemment utilisées sont évincées ; un résultat trop grand est calculé sans être
+retenu. Chaque appel reçoit sa propre copie mutable. Le parsing/validation du JSON Riot
+est partagé entre parcours collectifs et individuels, avec ses limites préexistantes.
+Les filtres restent calculés sur les résultats partagés, sans cache par combinaison.
+Le statut de synchronisation et le healthcheck ne sont jamais mis dans ce cache.
+
+Les caches sont jetables : un redémarrage ou un déploiement reconstruit les résultats à
+la première consultation. Aucune lecture issue d'une transaction d'écriture externe
+susceptible d'être annulée n'est publiée dans le cache.
+
+`npm run stats:benchmark` compare les parcours de données accueil, profil, mémoire et
+draft sur des fixtures classées de 100, 1 000 et 5 000 matchs (Solo/Duo, Flex à cinq,
+Flex partiel, patches, champions et rangs). Des tailles explicites sont possibles :
+`npm run stats:benchmark -- 1000 5000`. La commande vérifie l'identité des résultats,
+la limite de payload et un gain à chaud d'au moins 2 fois à partir de 1 000 matchs.
+Elle mesure la couche données, pas le rendu HTML ni la latence HTTP ; les temps absolus
+dépendent de la machine.
+
+Mesure locale du 9 novembre 2026 sur 1 000 matchs synthétiques (médianes, en ms) :
+
+| Parcours | Sans cache | Cache chaud |
+| --- | ---: | ---: |
+| Accueil | 164,0 | 13,1 |
+| Profil | 120,7 | 0,7 |
+| Mémoire | 110,5 | 6,4 |
+| Draft | 244,3 | 1,9 |
+
+Les routes du build ont aussi été vérifiées en HTTP sur une base synthétique séparée :
+réponses identiques à chaud, filtres conservés et renommage externe visible sans
+redémarrage. Ces chiffres ne constituent pas une promesse de latence en production.
+
+Pas de vues matérialisées, Redis, ORM ni schéma en étoile à ce stade. Le précalcul
+persistant ne devient utile que si les mesures en production montrent que la première
+consultation ou la reconstruction après synchronisation pénalise réellement l'usage.
+
+### Cache navigateur des images Riot
+
+Au build, les portraits de champions, profils et emblèmes de rang sont copiés sans
+transformation vers `_astro/riot/`, avec une empreinte SHA-256 de leur contenu dans
+l'URL. L'adaptateur Node leur applique `Cache-Control: public, max-age=31536000, immutable` :
+le navigateur peut les réutiliser entre pages et visites sans requête de validation.
+Une image modifiée obtient une nouvelle URL au prochain build. Les helpers partagés
+utilisent ces URLs côté serveur et dans la draft côté client ; en développement, ils
+conservent les URLs originales. Aucun préchargement massif ni service worker n'est ajouté.
 
 ## Déployer sur Railway
 
@@ -186,27 +293,30 @@ Ouvrir un shell **dans le conteneur déployé**, avec `railway ssh` après avoir
 le projet/service dans la CLI Railway. `railway run` exécute en local avec les variables
 distantes : ce n'est pas la commande pour écrire sur le volume.
 
-Dans ce shell, exécuter les commandes suivantes pour chacun des cinq Riot IDs :
+Dans ce shell, enregistrer les cinq Riot IDs explicitement (ou utiliser les cinq
+valeurs de `PLAYERS` avec `npm run sync -- setup`) :
 
 ```sh
 cd /app
-npm run resolvePuids -- "Pseudo#TAG"
+npm run sync -- setup "Joueur 1#EUW" "Joueur 2#EUW" "Joueur 3#EUW" "Joueur 4#EUW" "Joueur 5#EUW"
 ```
 
 Puis effectuer le backfill initial :
 
 ```sh
-npm run ingest:backfill
-npm run ingest:status
+npm run sync -- history --max-duration 120
+npm run sync -- status
 ```
 
-Le backfill fonctionne par lots bornés. Relancer `npm run ingest:backfill` pour les lots
-suivants; `npm run ingest:status` indique si des pages ou détails restent à traiter.
+Le backfill fonctionne par lots bornés, repris dans le budget de programmation indiqué
+(secondes; un appel HTTP en cours peut le dépasser). Relancer `npm run sync -- history`
+pour un seul lot suivant, ou avec un nouveau budget; `npm run sync -- status` indique
+si des pages ou détails restent à traiter et quand reprendre les détails différés.
 Vérifier ensuite les vrais matchs sur `/` et le résultat dans `/api/sync.json`. Pour relancer
 manuellement une collecte incrémentale :
 
 ```sh
-npm run ingest
+npm run sync -- update
 ```
 
 Il n'y a **pas de bouton public ni d'endpoint de synchronisation**. La CLI est réservée

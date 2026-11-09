@@ -37,18 +37,29 @@ function deferMatch(database: Database.Database, id: string, error: unknown): vo
 		.run(Date.now() + delay, id);
 }
 
-export async function ingest(database: Database.Database, client: RiotClient, backfill = false) {
+export async function ingest(database: Database.Database, client: RiotClient, backfill = false, options: { deadlineAt?: number } = {}) {
 	const startedAt = Date.now();
 	const capturedOn = new Date(startedAt).toISOString().slice(0, 10);
 	let newMatches = 0;
 	let pendingRemaining = 0;
+	const importedByQueue = { 420: 0, 440: 0 };
+	let existingMatches = 0;
+	let repairedMatches = 0;
+	let budgetExhausted = false;
+	const withinBudget = () => {
+		if (options.deadlineAt !== undefined && Date.now() >= options.deadlineAt) {
+			budgetExhausted = true;
+			return false;
+		}
+		return true;
+	};
 	const failures: string[] = [];
 	const players = database.prepare('SELECT puuid FROM players').all() as { puuid: string }[];
 	const roster = new Set(players.map((player) => player.puuid));
 	const supportsSoloDuo = Boolean(client.getRankedMatchIds);
 
 	try {
-		if (!roster.size) throw new Error('No players in DB; run resolvePuids first');
+		if (!roster.size) throw new Error('No players in DB; run npm run sync -- setup first');
 		const enqueue = database.prepare('INSERT OR IGNORE INTO ingest_pending (match_id) VALUES (?)');
 		database.prepare(`INSERT OR IGNORE INTO ingest_pending (match_id)
 			SELECT m.match_id FROM matches AS m
@@ -57,8 +68,9 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 					AND (p.lineup_size IS NULL OR p.lineup_size !=
 						(SELECT COUNT(*) FROM participants AS candidate WHERE candidate.match_id = m.match_id)))`).run();
 
-		for (const { puuid } of players) {
+		collection: for (const { puuid } of players) {
 			for (const queue of RANKED_QUEUES) {
+				if (!withinBudget()) break collection;
 				if (queue === 420 && !supportsSoloDuo) continue;
 				try {
 					const listIds = queue === 420 ? client.getRankedMatchIds! : client.getFlexMatchIds;
@@ -71,6 +83,7 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 						const seen = new Set<string>();
 
 						for (let page = 0; page < BACKFILL_PAGES_PER_QUEUE; page += 1) {
+							if (!withinBudget()) break collection;
 							const ids = await listIds(puuid, { start: nextStart, count: MATCH_PAGE_SIZE, queue });
 							if (ids.length && ids.every((id) => seen.has(id))) {
 								throw new Error('Riot pagination made no progress');
@@ -107,6 +120,7 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 
 						const seen = new Set<string>();
 						for (let start = 0; ; start += MATCH_PAGE_SIZE) {
+							if (!withinBudget()) break collection;
 							const ids = await listIds(puuid, { start, count: MATCH_PAGE_SIZE, startTime, queue });
 							if (ids.length && ids.every((id) => seen.has(id))) {
 								throw new Error('Riot pagination made no progress');
@@ -144,6 +158,7 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 			.all(startedAt, MATCH_DETAILS_PER_RUN) as { match_id: string }[];
 		const remove = database.prepare('DELETE FROM ingest_pending WHERE match_id = ?');
 		for (const { match_id: id } of pending) {
+			if (!withinBudget()) break;
 			try {
 				const existing = database.prepare(`SELECT raw_json AS rawJson, game_start_ts AS startedAt, duration_s AS durationS
 					FROM matches WHERE match_id = ?`).get(id) as { rawJson: string | null; startedAt: number | null; durationS: number | null } | undefined;
@@ -152,11 +167,13 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 						if (existing.rawJson === null || existing.startedAt === null || existing.durationS === null) throw new Error('Missing raw data');
 						validatedLineup(database, id, existing.rawJson, existing.startedAt, existing.durationS);
 						remove.run(id);
+						existingMatches += 1;
 						continue;
 					} catch {
 						// Legacy non-atomic ingestion may have left an incomplete row. Refetch before replacing it.
 					}
 				}
+				if (!withinBudget()) break;
 				const match = validateMatch(await client.getMatch(id), id);
 				const { info } = match;
 				const ours = info.participants.filter((participant) => roster.has(participant.puuid));
@@ -183,6 +200,8 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 					}
 					remove.run(id);
 				})();
+				if (existing) repairedMatches += 1;
+				else if (info.queueId === 440 || info.queueId === 420) importedByQueue[info.queueId] += 1;
 				if (!existing && info.queueId === 440 && ours.length === 5) newMatches += 1;
 			} catch (error) {
 				const message = `Match ${id}: ${messageOf(error)}`;
@@ -194,10 +213,12 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 
 		if (client.getRankEntries) {
 			for (const { puuid } of players) {
+				if (!withinBudget()) break;
 				const alreadyCaptured = database.prepare('SELECT 1 FROM rank_snapshots WHERE puuid = ? AND captured_on = ? LIMIT 1')
 					.get(puuid, capturedOn);
 				if (alreadyCaptured) continue;
 				try {
+					if (!withinBudget()) break;
 					const entries = await client.getRankEntries(puuid);
 					const byQueue = new Map(entries.map((entry) => [entry.queueType, entry]));
 					database.transaction(() => {
@@ -225,5 +246,5 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 
 	database.prepare('INSERT INTO ingest_runs (started_at, finished_at, new_matches, status) VALUES (?, ?, ?, ?)')
 		.run(startedAt, Date.now(), newMatches, failures.length ? 'failed' : 'ok');
-	return { newMatches, failures, pendingRemaining };
+	return { newMatches, failures, pendingRemaining, importedByQueue, existingMatches, repairedMatches, budgetExhausted };
 }

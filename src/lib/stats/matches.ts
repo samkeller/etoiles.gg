@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import { cachedRead } from './cache';
 import { compareRoles, isPosition } from '../lol';
 import type { MatchInfoDto, ObjectiveName, ParticipantDto, Position, TeamId } from '../types';
 import {
@@ -54,6 +55,10 @@ interface MemberRow {
 
 /** Matchs du plus récent au plus ancien : complets (5) ou partiels (2 à 4 Étoiles). */
 export function getMatches(database: Database.Database, scope: MatchScope = 'full'): MatchSummary[] {
+	return cachedRead(database, `matches:${scope}`, () => queryMatches(database, scope));
+}
+
+function queryMatches(database: Database.Database, scope: MatchScope): MatchSummary[] {
 	const [minLineup, maxLineup] =
 		scope === 'full' ? [FULL_LINEUP_SIZE, FULL_LINEUP_SIZE] : [MIN_PARTIAL_LINEUP_SIZE, FULL_LINEUP_SIZE - 1];
 

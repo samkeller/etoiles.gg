@@ -1,4 +1,7 @@
 import type Database from 'better-sqlite3';
+import { SCHEMA } from './schema';
+
+export const SCHEMA_VERSION = 5;
 
 interface Migration {
 	version: number;
@@ -9,7 +12,7 @@ interface Migration {
 const migrations: readonly Migration[] = [
 	{
 		version: 1,
-		sql: `
+		sql: `${SCHEMA}
 			CREATE TABLE individual_ingest_cursors (
 				puuid TEXT NOT NULL REFERENCES players(puuid),
 				queue_id INTEGER NOT NULL CHECK (queue_id = 420),
@@ -81,12 +84,56 @@ const migrations: readonly Migration[] = [
 			`);
 		},
 	},
+	{
+		version: 4,
+		apply(database) {
+			const columns = database.pragma('table_info(ingest_runs)') as { name: string }[];
+			if (!columns.some((column) => column.name === 'finished_at')) {
+				database.exec('ALTER TABLE ingest_runs ADD COLUMN finished_at INTEGER');
+			}
+		},
+	},
+	{
+		version: 5,
+		apply(database) {
+			database.exec(`
+				CREATE TABLE data_revision (
+					id INTEGER PRIMARY KEY CHECK (id = 1),
+					version INTEGER NOT NULL CHECK (version >= 0)
+				);
+				INSERT INTO data_revision (id, version) VALUES (1, 0);
+			`);
+			const tables = {
+				players: ['puuid', 'game_name', 'tag_line'],
+				matches: ['match_id', 'game_start_ts', 'duration_s', 'queue_id', 'raw_json'],
+				participants: ['match_id', 'puuid', 'champion', 'role', 'kills', 'deaths', 'assists', 'win', 'lineup_size'],
+				rank_snapshots: ['puuid', 'queue_type', 'captured_on', 'tier', 'division', 'league_points', 'wins', 'losses'],
+			};
+			for (const [table, columns] of Object.entries(tables)) {
+				for (const operation of ['INSERT', 'UPDATE', 'DELETE']) {
+					const condition = operation === 'UPDATE'
+						? `WHEN ${columns.map((column) => `OLD.${column} IS NOT NEW.${column}`).join(' OR ')}`
+						: '';
+					database.exec(`
+						CREATE TRIGGER ${table}_revision_${operation.toLowerCase()}
+						AFTER ${operation} ON ${table} ${condition}
+						BEGIN
+							UPDATE data_revision SET version = version + 1 WHERE id = 1;
+						END;
+					`);
+				}
+			}
+		},
+	},
 ];
 
 export function migrateDatabase(database: Database.Database): void {
 	const currentVersion = Number(database.pragma('user_version', { simple: true }));
 	if (!Number.isInteger(currentVersion) || currentVersion < 0) {
 		throw new Error('Invalid SQLite schema version.');
+	}
+	if (currentVersion > SCHEMA_VERSION) {
+		throw new Error(`SQLite schema version ${currentVersion} is newer than supported version ${SCHEMA_VERSION}.`);
 	}
 
 	for (const migration of migrations) {

@@ -10,14 +10,12 @@ import { formatPercent, formatSince, pluralize } from '../lib/format';
 import { championName, compareRoles } from '../lib/lol';
 import championNames from '../lib/lol/champion-names.json';
 import {
-	compositionsForSeats,
 	explorationPicks,
 	getIndividualProfiles,
-	getMatches,
+	getDraftHistory,
 	getPlayers,
 	getTeamBans,
 	MIN_DRAFT_GAMES,
-	toDraftMatches,
 } from '../lib/stats';
 
 const EXPLORATION_LIMIT = 6;
@@ -37,9 +35,7 @@ const seats = getPlayers(db)
 		};
 	});
 
-const matches = toDraftMatches(getMatches(db, 'full'));
-const compositions = compositionsForSeats(matches, seats.map((seat) => seat.puuid))
-	.sort((left, right) => right.games - left.games || right.lastPlayedAt - left.lastPlayedAt);
+const { matches, compositions } = getDraftHistory(db);
 const bans = getTeamBans(db);
 const catalog = Object.entries(championNames)
 	.map(([id, name]) => ({ id, name }))

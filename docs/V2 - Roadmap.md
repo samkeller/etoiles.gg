@@ -27,7 +27,7 @@ validées et les fonctionnalités encore reportées sont distingués ci-dessous.
 
 ### V2.1 — Données enrichies · socle livré, collecte réelle à valider
 
-- Migrations SQLite V1 à V3 additives et transactionnelles; les matchs, participants et
+- Migrations SQLite V1 à V5 additives et transactionnelles; les matchs, participants et
   réponses `raw_json` existants sont conservés. V3 répare aussi une base déjà marquée V2
   si elle n'a pas les colonnes de reprise des détails.
 - Collecte classée Solo/Duo (`queue 420`) avec curseur distinct; collecte Flex (`queue 440`)
@@ -38,7 +38,7 @@ validées et les fonctionnalités encore reportées sont distingués ci-dessous.
 - Backfill par lots : deux pages de 100 IDs au plus par joueur/file et au plus 100 détails
   traités par exécution. Le curseur de page avance dans la même transaction que les IDs
   mis en file.
-- `npm run ingest:status` expose les curseurs par joueur/file, les détails en attente et
+- `npm run sync -- status` expose les curseurs par joueur/file, les détails en attente et
   leur prochaine reprise. Les erreurs individuelles sont reprises avec backoff exponentiel;
   un seul match défaillant ne monopolise pas tous les lots suivants.
 - Les timeouts Riot sont de 30 secondes; les limites et `Retry-After` restent respectés.
@@ -102,7 +102,22 @@ validées et les fonctionnalités encore reportées sont distingués ci-dessous.
 
 - Astro SSR, SQLite `better-sqlite3`, SQL brut, Tailwind CSS v4 et Vitest sont conservés.
 - `src/lib/db/schema.ts` reste le schéma initial; `src/lib/db/migrations.ts` applique les
-  évolutions avec `PRAGMA user_version` dans des transactions.
+  évolutions avec `PRAGMA user_version` dans des transactions, y compris la création du
+  socle et la reprise de `ingest_runs.finished_at`. Les versions futures sont refusées.
+- La version persistante `data_revision` suit les écritures effectives des données métier,
+  même lors d'une ingestion partiellement échouée. Les écritures opérationnelles seules
+  (verrou, curseurs, file et statut) ne périment pas les statistiques.
+- Les lectures coûteuses utilisent un cache mémoire borné par connexion/version :
+  profils, résumés, bilan collectif non filtré, bans, soirées et historique de draft.
+  Les résultats restent reconstructibles, les copies indépendantes et les filtres hors
+  du cache. Le statut de synchronisation et le healthcheck restent frais.
+- Le benchmark `npm run stats:benchmark` compare les résultats et les temps à froid/
+  chaud sur des historiques synthétiques mixtes. Aucun précalcul persistant, ORM ou
+  schéma en étoile n'est ajouté sans besoin confirmé par les mesures.
+- `sync` est le seul point d'entrée de collecte, y compris pour le planificateur ;
+  les anciens wrappers `ingest`, `ingest:backfill`, `ingest:status` et `resolvePuids` sont retirés.
+- Les portraits de champions/profils et emblèmes de rang restent des images Riot originales,
+  publiées au build sous une URL à empreinte de contenu et mises en cache un an par le navigateur.
 - `matches.raw_json` conserve patch et champs Match-V5. `participants` conserve les
   Étoiles présentes; les profils personnels relisent les participants suivis dans le JSON
   validé.
@@ -150,8 +165,8 @@ statiques restent référencés localement. Les emblèmes de rang présents dans
 - Base locale après migration : 342 matchs (293 Flex, 49 Solo/Duo), 772 participants et
   61 lineups Flex complets conservés; 608 détails sont en attente et prêts à traiter.
   Aucun backfill, appel Riot réel, snapshot de rang ou déploiement n'a été déclenché.
-- À valider avec la clé et la base de production, sans révéler la clé : `npm run ingest`,
-  lots `npm run ingest:backfill`, reprise après interruption/429, endpoint League-V4,
+- À valider avec la clé et la base de production, sans révéler la clé : `npm run sync -- update`,
+  lots `npm run sync -- history`, reprise après interruption/429, endpoint League-V4,
   snapshots et stabilité du volume Railway.
 - À construire ensuite : timelines sélectionnées et extraction d'événements, insights
   déterministes multi-signaux, saisons compétitives vérifiées, records, récapitulatif
@@ -170,6 +185,6 @@ statiques restent référencés localement. Les emblèmes de rang présents dans
    les détails, puis développer le parcours classé personnel et les snapshots de rang.
 4. **Draft** : cliquer un champion sur un ou plusieurs sièges, lire l'historique et les
    synergies observées, recharger une composition déjà jouée puis copier le lien.
-5. **Synchronisation** : lancer `npm run ingest` pour les nouveautés; lancer plusieurs fois
-   `npm run ingest:backfill` pour le passé disponible, et vérifier l'avancement avec
-   `npm run ingest:status`.
+5. **Synchronisation** : lancer `npm run sync -- update` pour les nouveautés; lancer plusieurs fois
+   `npm run sync -- history` pour le passé disponible, et vérifier l'avancement avec
+   `npm run sync -- status`.

@@ -6,7 +6,7 @@ import TeamCollective from '../components/sections/TeamCollective.astro';
 import SessionConstellation from '../components/memory/SessionConstellation.astro';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { db } from '../lib/db/db';
-import { calculateCollective, getMatches, getOverview, getPlayers, getTeamSessions } from '../lib/stats';
+import { getCollective, getMatches, getOverview, getPlayers, getSessionHistory } from '../lib/stats';
 import { isPosition } from '../lib/lol';
 import type { Position } from '../lib/types';
 import { TEAM_NAME } from '../lib/site';
@@ -23,8 +23,8 @@ const overview = getOverview(db);
 const players = getPlayers(db);
 const fullMatches = getMatches(db, 'full');
 const partialMatches = getMatches(db, 'partial');
-const sessions = getTeamSessions(fullMatches);
-const collective = calculateCollective(fullMatches, associationRoles);
+const sessions = getSessionHistory(db);
+const collective = getCollective(db, associationRoles);
 const recentMatches = fullMatches.slice(0, overview.recentForm.length).reverse();
 ---
 

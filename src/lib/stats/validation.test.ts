@@ -20,16 +20,16 @@ describe('shared persisted match validation', () => {
 		const parse = vi.spyOn(JSON, 'parse');
 		try {
 			getMatches(database);
-			expect(prepare).toHaveBeenCalledTimes(2);
+			expect(prepare).toHaveBeenCalledTimes(3);
 			prepare.mockClear();
 			const parsedBefore = parse.mock.calls.length;
 			getPlayers(database);
-			expect(prepare).toHaveBeenCalledTimes(3);
+			expect(prepare).toHaveBeenCalledTimes(4);
 			expect(parse).toHaveBeenCalledTimes(parsedBefore);
 			prepare.mockClear();
 			getMatches(database);
-			expect(prepare).toHaveBeenCalledTimes(2);
-			expect(parse).toHaveBeenCalledTimes(parsedBefore);
+			expect(prepare).toHaveBeenCalledTimes(1);
+			expect(parse).toHaveBeenCalledTimes(parsedBefore + 1);
 			database.exec(`UPDATE matches SET raw_json = json_set(raw_json, '$.info.participants[0].kills', 100) WHERE match_id = 'EUW1_999'`);
 			expect(() => getMatches(database)).toThrow('Inconsistent');
 		} finally {

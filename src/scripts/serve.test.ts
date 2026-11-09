@@ -34,7 +34,7 @@ describe('production runtime startup gates', () => {
 		const database = openDatabase(path);
 		try {
 			database.prepare("INSERT INTO ingest_lock VALUES (1, 'fixture', ?)").run(Date.now() + 300_000);
-			const result = spawnSync(process.execPath, ['--import', 'tsx', resolve('src', 'scripts', 'ingest.ts')], {
+			const result = spawnSync(process.execPath, ['--import', 'tsx', resolve('src', 'scripts', 'sync.ts'), 'update'], {
 				env: { ...process.env, DATABASE_PATH: path, RIOT_API_KEY: '' },
 				encoding: 'utf8', timeout: 10_000,
 			});

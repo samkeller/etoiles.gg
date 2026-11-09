@@ -105,7 +105,7 @@ describe('ingestion', () => {
 	it('records a failed run for an empty roster without calling Riot', async () => {
 		const database = createTestDatabase();
 		const client = { getFlexMatchIds: vi.fn(), getMatch: vi.fn() };
-		expect((await ingest(database, client)).failures).toEqual(['No players in DB; run resolvePuids first']);
+		expect((await ingest(database, client)).failures).toEqual(['No players in DB; run npm run sync -- setup first']);
 		expect(database.prepare('SELECT status FROM ingest_runs').get()).toEqual({ status: 'failed' });
 		expect(client.getFlexMatchIds).not.toHaveBeenCalled();
 	});

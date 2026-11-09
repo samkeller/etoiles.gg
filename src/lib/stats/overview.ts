@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3';
 import type { MatchOutcome } from './shared';
 import { getMatches } from './matches';
+import { cachedRead } from './cache';
 
 export const RECENT_FORM_SIZE = 20;
 
@@ -26,6 +27,10 @@ interface TeamMatchResult {
 }
 
 export function getOverview(database: Database.Database): TeamOverview {
+	return cachedRead(database, 'overview', () => queryOverview(database));
+}
+
+function queryOverview(database: Database.Database): TeamOverview {
 	const matches = getMatches(database, 'full');
 	const results: TeamMatchResult[] = matches.map((match) => ({
 		startedAt: match.startedAt,

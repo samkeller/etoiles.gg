@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import { cachedRead } from './cache';
 import { championId, compareRoles, isPosition } from '../lol';
 import type { Position } from '../types';
 import { kdaRatio, minutes, validatedLineup, ratio, toOutcome, type MatchOutcome, type StoredMember } from './shared';
@@ -94,6 +95,10 @@ interface GameLine {
 
 /** Fiches des joueurs, calculées uniquement sur les matchs joués à cinq. */
 export function getPlayers(database: Database.Database): PlayerProfile[] {
+	return cachedRead(database, 'players', () => queryPlayers(database));
+}
+
+function queryPlayers(database: Database.Database): PlayerProfile[] {
 	const players = database
 		.prepare('SELECT puuid, game_name AS name, tag_line AS tagLine FROM players')
 		.all() as PlayerRow[];

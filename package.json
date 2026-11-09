@@ -14,10 +14,8 @@
     "check": "astro check",
     "test": "vitest run",
     "test:watch": "vitest",
-    "ingest": "tsx src/scripts/ingest.ts",
-    "ingest:backfill": "tsx src/scripts/ingest.ts --backfill",
-    "ingest:status": "tsx src/scripts/ingestStatus.ts",
-    "resolvePuids": "tsx src/scripts/resolvePuids.ts",
+    "sync": "tsx src/scripts/sync.ts",
+    "stats:benchmark": "tsx src/scripts/statsBenchmark.ts",
     "syncAssets": "tsx src/scripts/syncAssets.ts"
   },
   "dependencies": {

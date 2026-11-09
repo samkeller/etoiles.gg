@@ -9,7 +9,7 @@ Ce fichier est maintenu par l'agent ; le développeur valide et déplace.
 
 ### Todo
 
-- [ ]
+- [ ] [MEDIUM] Mesurer puis limiter le coût du rendu des longues archives par pagination ou chargement progressif — cible : src/pages/history.astro, rendu HTTP chaud environ 130 ms sur 1 000 matchs synthétiques malgré le cache des données, effort estimé : moyen
  
 ### In Progress
 
@@ -23,4 +23,3 @@ Ce fichier est maintenu par l'agent ; le développeur valide et déplace.
 ### Done ✓
 
 - [ ]
-

@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import { cachedRead } from './cache';
 import { championId, compareRoles } from '../lol';
 import { getMatches, type MatchMember, type MatchSummary } from './matches';
 import type { Position } from '../types';
@@ -107,6 +108,9 @@ function comparePatches(left: string, right: string): number {
 }
 
 export function getCollective(database: Database.Database, associationRoles: readonly Position[] = []): TeamCollective {
+	if (associationRoles.length === 0) {
+		return cachedRead(database, 'collective', () => calculateCollective(getMatches(database)));
+	}
 	return calculateCollective(getMatches(database), associationRoles);
 }
 

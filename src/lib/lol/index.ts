@@ -6,6 +6,11 @@ import championNames from './champion-names.json';
 const DATA_DRAGON_IDS: Record<string, string> = { FiddleSticks: 'Fiddlesticks' };
 
 const names: Record<string, string> = championNames;
+const assetUrls: Record<string, string> = typeof __RIOT_ASSETS__ === 'undefined' ? {} : __RIOT_ASSETS__;
+
+function riotAsset(path: string): string {
+	return assetUrls[path] ?? path;
+}
 
 export function championId(riotChampionName: string): string {
 	return DATA_DRAGON_IDS[riotChampionName] ?? riotChampionName;
@@ -17,7 +22,7 @@ export function championName(riotChampionName: string): string {
 }
 
 export function championIcon(riotChampionName: string): string {
-	return `/riot/champions/${championId(riotChampionName)}.png`;
+	return riotAsset(`/riot/champions/${championId(riotChampionName)}.png`);
 }
 
 export const ROLE_ORDER: readonly Position[] = ['TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM', 'UTILITY'];
@@ -78,9 +83,9 @@ export function tierLabel(tier: string, division?: string | null): string {
 
 export function rankEmblem(tier: string): string | null {
 	const key = tier.toUpperCase();
-	return key in TIER_LABELS ? `/riot/ranks/emblem-${key.toLowerCase()}.png` : null;
+	return key in TIER_LABELS ? riotAsset(`/riot/ranks/emblem-${key.toLowerCase()}.png`) : null;
 }
 
 export function profileIcon(puuid: string): string {
-	return `/riot/profiles/${puuid}.png`;
+	return riotAsset(`/riot/profiles/${puuid}.png`);
 }

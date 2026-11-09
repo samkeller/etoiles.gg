@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 import { championId } from '../lol';
 import { getMatches } from './matches';
 import { parseMatchInfo } from './shared';
+import { cachedRead } from './cache';
 
 export interface BanRecord {
 	champion: string;
@@ -22,6 +23,10 @@ export interface TeamBans {
  * sont résolus grâce aux participants des matchs déjà stockés, sans appel externe.
  */
 export function getTeamBans(database: Database.Database): TeamBans {
+	return cachedRead(database, 'bans', () => queryTeamBans(database));
+}
+
+function queryTeamBans(database: Database.Database): TeamBans {
 	const keys = new Map(
 		(database.prepare(`SELECT DISTINCT CAST(json_extract(participant.value, '$.championId') AS INTEGER) AS id,
 			json_extract(participant.value, '$.championName') AS name

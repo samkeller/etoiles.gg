@@ -1,13 +1,11 @@
 import Database from 'better-sqlite3';
 import { migrateDatabase } from '../db/migrations';
-import { SCHEMA } from '../db/schema';
 import type { MatchDto, ParticipantDto, Position, TeamId } from '../types';
 
 const openDatabases: Database.Database[] = [];
 
 export function createTestDatabase(): Database.Database {
 	const database = new Database(':memory:');
-	database.exec(SCHEMA);
 	migrateDatabase(database);
 	openDatabases.push(database);
 	return database;
@@ -44,6 +42,8 @@ export interface FixtureMatch {
 	lineupSize?: number;
 	durationS?: number;
 	withRawJson?: boolean;
+	queueId?: 420 | 440;
+	gameVersion?: string;
 	/** Clés numériques bannies par notre équipe (côté 100) ; omis = réponse sans bans. */
 	bans?: readonly number[];
 }
@@ -93,9 +93,9 @@ export function addMatch(database: Database.Database, match: FixtureMatch): void
 		info: {
 			gameCreation: match.startedAt,
 			gameDuration: durationS,
-			gameVersion: '16.22.834.8910',
+			gameVersion: match.gameVersion ?? '16.22.834.8910',
 			platformId: 'EUW1',
-			queueId: 440,
+			queueId: match.queueId ?? 440,
 			participants: [
 				...allies.map((member) => participant(member, 100, match.won)),
 				...enemies.map((member) => participant(member, 200, !match.won)),
@@ -114,7 +114,7 @@ export function addMatch(database: Database.Database, match: FixtureMatch): void
 
 	database
 		.prepare('INSERT INTO matches (match_id, game_start_ts, duration_s, queue_id, raw_json) VALUES (?, ?, ?, ?, ?)')
-		.run(match.id, match.startedAt, durationS, 440, match.withRawJson === false ? null : JSON.stringify(raw));
+		.run(match.id, match.startedAt, durationS, match.queueId ?? 440, match.withRawJson === false ? null : JSON.stringify(raw));
 
 	const insertParticipant = database.prepare(`
 		INSERT INTO participants
@@ -140,4 +140,47 @@ export function addMatch(database: Database.Database, match: FixtureMatch): void
 /** Cinq membres anonymes, un par rôle. */
 export function fullLineup(overrides: Partial<Record<number, Partial<FixtureMember>>> = {}): FixtureMember[] {
 	return FILLER_ROLES.map((role, index) => ({ puuid: `player-${index}`, role, ...overrides[index] }));
+}
+
+export function seedRankedHistory(database: Database.Database, count: number): void {
+	if (!Number.isSafeInteger(count) || count < 0) throw new Error('Fixture match count must be a nonnegative integer.');
+	database.transaction(() => {
+		for (let player = 0; player < 5; player += 1) addPlayer(database, `player-${player}`, `Player ${player}`);
+		const champions = ['Aatrox', 'Vi', 'Ahri', 'Jinx', 'Nautilus'];
+		const championKeys = [266, 254, 103, 222, 111];
+		for (let index = 0; index < count; index += 1) {
+			const members = fullLineup();
+			for (let player = 0; player < 5; player += 1) {
+				members[player] = {
+					...members[player],
+					champion: champions[(player + Math.floor(index / 7)) % champions.length],
+					championKey: championKeys[(player + Math.floor(index / 7)) % champions.length],
+					kills: (index + player) % 15,
+					deaths: (index + player) % 8,
+					assists: (index * 3 + player) % 20,
+					cs: 50 + (index + player * 30) % 220,
+					damage: 10000 + (index * 100 + player * 3000) % 30000,
+					vision: 10 + (index + player * 10) % 70,
+				};
+			}
+			const solo = index % 5 < 2;
+			const lineup = solo ? [members[index % 5]] : index % 5 === 2 ? members.slice(0, 2 + index % 3) : members;
+			addMatch(database, {
+				id: `EUW1_${index + 1}`,
+				startedAt: Date.UTC(2024, 0, 1) + Math.floor(index / 5) * 86400000 + (index % 5) * 2400000,
+				won: index % 3 !== 0,
+				members: lineup,
+				queueId: solo ? 420 : 440,
+				gameVersion: `16.${1 + Math.floor(index / 100) % 24}.1`,
+				bans: [266, 103],
+			});
+		}
+		for (let player = 0; player < 5; player += 1) {
+			for (const queue of ['RANKED_SOLO_5x5', 'RANKED_FLEX_SR']) {
+				database.prepare(`INSERT INTO rank_snapshots
+					(puuid, queue_type, captured_on, tier, division, league_points, wins, losses)
+					VALUES (?, ?, '2026-11-09', 'GOLD', 'II', 50, 30, 20)`).run(`player-${player}`, queue);
+			}
+		}
+	})();
 }

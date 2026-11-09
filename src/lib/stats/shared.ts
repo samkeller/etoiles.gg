@@ -23,7 +23,7 @@ const MAX_CACHED_CHARACTERS = 16 * 1024 * 1024;
 const MAX_CACHED_MATCHES = 256;
 let cachedCharacters = 0;
 
-function parsedMatch(rawJson: string): MatchDto {
+export function parsedMatch(rawJson: string): MatchDto {
 	const cached = parsed.get(rawJson);
 	if (cached) {
 		parsed.delete(rawJson);

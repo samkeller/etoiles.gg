@@ -1,8 +1,8 @@
 import type Database from 'better-sqlite3';
 import { championId, isPosition } from '../lol';
-import { validateMatch } from '../matchValidation';
 import type { Position } from '../types';
-import type { MatchOutcome } from './shared';
+import { parsedMatch, type MatchOutcome } from './shared';
+import { cachedRead } from './cache';
 import type { ChampionRecord, RoleShare } from './players';
 
 export type RankedQueue = 'soloDuo' | 'flex';
@@ -144,6 +144,10 @@ function rankHistories(rows: readonly SnapshotRow[]): Map<string, { soloDuo: Ran
 }
 
 export function getIndividualProfiles(database: Database.Database): IndividualProfile[] {
+	return cachedRead(database, 'individual', () => queryIndividualProfiles(database));
+}
+
+function queryIndividualProfiles(database: Database.Database): IndividualProfile[] {
 	const players = database.prepare('SELECT puuid, game_name AS name, tag_line AS tagLine FROM players')
 		.all() as PlayerRow[];
 	const tracked = new Map(players.map((player) => [player.puuid, player]));
@@ -155,7 +159,9 @@ export function getIndividualProfiles(database: Database.Database): IndividualPr
 
 	for (const match of matches) {
 		if (!match.rawJson || match.startedAt === null) throw new Error(`Missing raw data for ranked match ${match.id}.`);
-		const { info } = validateMatch(JSON.parse(match.rawJson), match.id);
+		const raw = parsedMatch(match.rawJson);
+		if (raw.metadata.matchId !== match.id) throw new Error(`Malformed raw match data for ${match.id}.`);
+		const { info } = raw;
 		if (info.queueId !== 420 && info.queueId !== 440) {
 			throw new Error(`Unexpected queue in ranked match ${match.id}.`);
 		}
