@@ -2,6 +2,7 @@
 import Avatar from '../ui/Avatar.astro';
 import ChampionIcon from '../ui/ChampionIcon.astro';
 import ChampionTile from '../ui/ChampionTile.astro';
+import OpggIcon from '../ui/OpggIcon.astro';
 import Panel from '../ui/Panel.astro';
 import RoleIcon from '../ui/RoleIcon.astro';
 import Sparkline from '../ui/Sparkline.astro';
@@ -36,7 +37,7 @@ const percent = (value: number | null) => (value === null ? '—' : formatPercen
 		{player.tagLine && <p class="text-xs text-muted">#{player.tagLine}</p>}
 	</header>
 	<a href={`/players/${player.puuid}`} class="focus-ring mt-4 inline-flex min-h-10 items-center justify-center gap-2 border border-sky-300/25 bg-sky-300/5 px-3 text-xs font-medium text-sky-200 transition-colors hover:border-sky-300/55 hover:bg-sky-300/10 hover:text-ink">
-		Voir ses parties à cinq <span aria-hidden="true">↗</span>
+		Voir ses parties à cinq <OpggIcon name="ui-arrow-right" class="size-3 -rotate-45" />
 	</a>
 
 	{

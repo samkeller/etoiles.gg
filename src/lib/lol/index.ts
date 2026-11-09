@@ -1,4 +1,5 @@
 import type { Position } from '../types';
+import type { OpggIconName } from '../opgg-icons';
 import championNames from './champion-names.json';
 
 /** Identifiants Match-V5 qui diffèrent de ceux de Data Dragon. */
@@ -37,8 +38,16 @@ export function roleLabel(role: Position | null): string {
 	return role === null ? 'Rôle inconnu' : ROLE_LABELS[role];
 }
 
-export function roleIcon(role: Position | null): string {
-	return `/riot/positions/icon-position-${role === null ? 'fill' : role.toLowerCase()}.png`;
+const ROLE_ICONS: Record<Position, OpggIconName> = {
+	TOP: 'role-top',
+	JUNGLE: 'role-jungle',
+	MIDDLE: 'role-mid',
+	BOTTOM: 'role-adc',
+	UTILITY: 'role_support',
+};
+
+export function roleIcon(role: Position | null): OpggIconName {
+	return role === null ? 'ui-questionmark-circle' : ROLE_ICONS[role];
 }
 
 /** Tri stable par rôle (Top → Support), les rôles inconnus en dernier. */

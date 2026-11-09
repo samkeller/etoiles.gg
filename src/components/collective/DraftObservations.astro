@@ -3,9 +3,10 @@ import DraftRow from './DraftRow.astro';
 import Disclosure from '../ui/Disclosure.astro';
 import Panel from '../ui/Panel.astro';
 import { pluralize } from '../../lib/format';
-import { ROLE_ORDER, roleIcon, roleLabel } from '../../lib/lol';
+import { ROLE_ORDER, roleLabel } from '../../lib/lol';
 import type { DraftObservation, PendingDraftObservation } from '../../lib/stats';
 import type { Position } from '../../lib/types';
+import RoleIcon from '../ui/RoleIcon.astro';
 
 interface Props {
 	title: string;
@@ -54,7 +55,7 @@ function roleHref(role: Position): string {
 								data-tip={active ? 'Retirer du filtre' : associationRoles.length >= 2 ? 'Remplace le second rôle' : 'Ajouter au filtre'}
 								class:list={['focus-ring grid size-10 place-items-center border transition-colors motion-reduce:transition-none',
 									active ? 'border-gold-200/70 bg-gold-200/12 shadow-glow-gold' : 'border-white/10 hover:border-white/30 hover:bg-white/5']}>
-								<img src={roleIcon(role)} alt={roleLabel(role)} width="34" height="34" class:list={['size-6 object-contain transition-opacity', !active && 'opacity-60']} />
+								<RoleIcon role={role} decorative class={active ? 'size-6' : 'size-6 opacity-60'} />
 							</a>
 						</li>
 					);

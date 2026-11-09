@@ -1,0 +1,15 @@
+<svg cx="50%" cy="50%" class="recharts-surface" width="90" height="90" style="width: 100%; height: 100%;" viewBox="0 0 90 90"><title></title><desc></desc><defs><clipPath id="recharts1-clip"><rect x="5" y="5" height="80" width="80"></rect></clipPath></defs><g class="recharts-layer recharts-pie" tabindex="0"><g class="recharts-layer"><g class="recharts-layer recharts-pie-sector" tabindex="-1"><path cx="45" cy="45" name="win" stroke="none" fill="var(--lol-main-500)" color="var(--lol-main-500)" tabindex="-1" class="recharts-sector" d="M 45,0
+    A 45,45,0,
+    0,1,
+    58.905764746872634,87.79754323328191
+  L 55.19756081437326,76.38486503774007
+            A 33,33,0,
+            0,0,
+            45,12 Z" role="img"></path></g><g class="recharts-layer recharts-pie-sector" tabindex="-1"><path cx="45" cy="45" name="lose" stroke="none" fill="var(--lol-red-500)" color="var(--lol-red-500)" tabindex="-1" class="recharts-sector" d="M 58.905764746872634,87.79754323328191
+    A 45,45,0,
+    1,1,
+    44.99999999999999,0
+  L 44.99999999999999,12
+            A 33,33,0,
+            1,0,
+            55.19756081437326,76.38486503774007 Z" role="img"></path></g></g></g></svg>

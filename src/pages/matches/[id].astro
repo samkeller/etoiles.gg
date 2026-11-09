@@ -1,4 +1,5 @@
 ---
+import OpggIcon from '../../components/ui/OpggIcon.astro';
 import MatchDetail from '../../components/matches/MatchDetail.astro';
 import Panel from '../../components/ui/Panel.astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
@@ -17,7 +18,9 @@ const result = match.outcome === 'win' ? 'Victoire' : 'Défaite';
 <BaseLayout title={`${result} · ${formatDate(match.startedAt)} — etoiles.win`} description={`Le récit de notre match du ${formatDate(match.startedAt)} : composition, statistiques, objectifs et patch ${match.patch}.`}>
 	<main class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 px-4 py-10 sm:px-8 sm:py-14">
 		<nav aria-label="Fil d’Ariane">
-			<a href="/history" class="focus-ring text-sm text-muted transition-colors hover:text-ink">← Retour à la mémoire des Étoiles</a>
+			<a href="/history" class="focus-ring inline-flex items-center gap-2 text-sm text-muted transition-colors hover:text-ink">
+				<OpggIcon name="ui-arrow-right" class="size-3 rotate-180" /> Retour à la mémoire des Étoiles
+			</a>
 		</nav>
 		<header class="max-w-3xl">
 			<p class="label-caps text-sky-300">{match.queueId === 420 ? 'Solo/Duo classée' : 'Classé flexible'} · patch {match.patch}</p>
@@ -31,3 +34,4 @@ const result = match.outcome === 'win' ? 'Victoire' : 'Défaite';
 		</Panel>
 	</main>
 </BaseLayout>
+import OpggIcon from '../../components/ui/OpggIcon.astro';

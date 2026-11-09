@@ -1,5 +1,6 @@
 ---
 import type { HTMLAttributes } from 'astro/types';
+import OpggIcon from './OpggIcon.astro';
 
 interface Props extends HTMLAttributes<'details'> {
 	summary: string;
@@ -19,10 +20,7 @@ const { summary, hint, class: className, ...attributes } = Astro.props;
 			<span class="label-caps text-gold-200">{summary}</span>
 			{hint && <span class="text-xs text-muted">{hint}</span>}
 		</span>
-		<span
-			aria-hidden="true"
-			class="size-2 shrink-0 rotate-135 border-t border-r border-gold-500 transition-transform group-open:-rotate-45"
-		></span>
+		<OpggIcon name="ui-expand-down" class="size-4 shrink-0 text-gold-500 transition-transform group-open:rotate-180" />
 	</summary>
 	<slot />
 </details>

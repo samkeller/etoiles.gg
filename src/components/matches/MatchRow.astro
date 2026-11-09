@@ -1,5 +1,6 @@
 ---
 import ChampionIcon from '../ui/ChampionIcon.astro';
+import OpggIcon from '../ui/OpggIcon.astro';
 import StarPresence from '../ui/StarPresence.astro';
 import { formatDuration, formatKda, formatShortDate, formatTime } from '../../lib/format';
 import type { MatchSummary } from '../../lib/stats';
@@ -52,10 +53,7 @@ const Action = permalinkOnly ? 'a' : 'button';
 			<span class="label-caps block font-body text-[0.625rem] text-muted">KDA collectif</span>
 		</span>
 
-		<span
-			aria-hidden="true"
-			class="size-2 rotate-45 border-t border-r border-gold-500 transition-transform group-hover:translate-x-0.5 group-hover:border-gold-200 max-sm:hidden"
-		></span>
+		<OpggIcon name="ui-arrow-right" class="size-3 text-gold-500 transition-transform group-hover:translate-x-0.5 group-hover:text-gold-200 max-sm:hidden" />
 		<span class="sr-only">{permalinkOnly ? 'Ouvrir la page du match' : 'Ouvrir le détail rapide du match'}</span>
 	</Action>
 	{!permalinkOnly && <a
@@ -63,6 +61,6 @@ const Action = permalinkOnly ? 'a' : 'button';
 		class="focus-ring grid w-10 shrink-0 place-items-center border-l border-white/10 text-muted transition-colors hover:bg-white/5 hover:text-ink"
 		aria-label={`Ouvrir la page complète du match ${match.id}`}
 	>
-		<span aria-hidden="true">↗</span>
+		<OpggIcon name="ui-arrow-right" class="size-3 -rotate-45" />
 	</a>}
 </div>

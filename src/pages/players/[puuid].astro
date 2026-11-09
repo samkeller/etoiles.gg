@@ -4,15 +4,17 @@ import ChampionIcon from '../../components/ui/ChampionIcon.astro';
 import ChampionTile from '../../components/ui/ChampionTile.astro';
 import MeterBar from '../../components/ui/MeterBar.astro';
 import MotionItem from '../../components/ui/MotionItem.astro';
+import OpggIcon from '../../components/ui/OpggIcon.astro';
 import Panel from '../../components/ui/Panel.astro';
 import QueueBadge from '../../components/ui/QueueBadge.astro';
 import RankEmblem from '../../components/ui/RankEmblem.astro';
+import RoleIcon from '../../components/ui/RoleIcon.astro';
 import SegmentedNav from '../../components/ui/SegmentedNav.astro';
 import StarPresence from '../../components/ui/StarPresence.astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { db } from '../../lib/db/db';
 import { formatDecimal, formatKda, formatPercent, formatSince, formatShortDate, pluralize } from '../../lib/format';
-import { championName, profileIcon, roleIcon, roleLabel, tierLabel } from '../../lib/lol';
+import { championName, profileIcon, roleLabel, tierLabel } from '../../lib/lol';
 import { getIndividualProfiles, getPlayers, MIN_DRAFT_GAMES, type RankedMatch } from '../../lib/stats';
 
 export const prerender = false;
@@ -76,7 +78,9 @@ const presenceTip = (match: RankedMatch) =>
 
 <BaseLayout title={`${profile.name} — etoiles.win`} description={`Les champions, les parties à cinq et le parcours classé de ${profile.name}.`}>
 	<main class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-10 px-4 py-8 sm:px-8 sm:py-12">
-		<a href="/#roster-title" class="focus-ring w-fit text-sm text-muted transition-colors hover:text-ink">← Les cinq Étoiles</a>
+		<a href="/#roster-title" class="focus-ring inline-flex w-fit items-center gap-2 text-sm text-muted transition-colors hover:text-ink">
+			<OpggIcon name="ui-arrow-right" class="size-3 rotate-180" /> Les cinq Étoiles
+		</a>
 
 		<header class="grid items-center gap-6 border-b border-white/10 pb-8 sm:grid-cols-[auto_minmax(0,1fr)_auto]">
 			<Avatar src={profileIcon(profile.puuid)} class="size-20 sm:size-24" />
@@ -90,7 +94,7 @@ const presenceTip = (match: RankedMatch) =>
 							<span data-tip-title={roleLabel(share.role)} data-tip={`${pluralize(share.games, 'partie')} à cinq`}
 								class:list={['inline-flex h-8 items-center gap-2 border px-2.5 text-xs',
 									index === 0 ? 'border-gold-300/50 bg-gold-200/8 text-gold-100' : 'border-white/10 text-muted']}>
-								<img src={roleIcon(share.role)} alt="" width="34" height="34" class="size-4 object-contain" />
+								<RoleIcon role={share.role} decorative class="size-4" />
 								{index === 0 ? roleLabel(share.role) : share.games}
 								<span class="sr-only">{roleLabel(share.role)} : {share.games} parties</span>
 							</span>
@@ -176,7 +180,7 @@ const presenceTip = (match: RankedMatch) =>
 									</span>
 									<span class="text-xs text-muted">{championName(teamProfile.bestGame.champion)} · {formatShortDate(teamProfile.bestGame.startedAt)}</span>
 								</span>
-								<span aria-hidden="true" class="text-gold-200 transition-transform group-hover:translate-x-1">→</span>
+								<OpggIcon name="ui-arrow-right" class="size-3 text-gold-200 transition-transform group-hover:translate-x-1" />
 							</a>
 						)}
 					</>
@@ -255,7 +259,7 @@ const presenceTip = (match: RankedMatch) =>
 								<span aria-hidden="true" class:list={['absolute inset-y-2 left-0 w-1', match.outcome === 'win' ? 'bg-win shadow-glow-gold' : 'bg-loss']}></span>
 								<span class="relative">
 									<ChampionIcon champion={match.champion} size="md" outcome={match.outcome} tip={false} />
-									<img src={roleIcon(match.role)} alt="" width="34" height="34" class="absolute -right-1.5 -bottom-1.5 size-4 rounded-full bg-night-950 p-px" />
+									<RoleIcon role={match.role} decorative class="absolute -right-1.5 -bottom-1.5 size-4 rounded-full bg-night-950 p-px" />
 								</span>
 								<span class="min-w-0">
 									<span class:list={['block font-display text-base', match.outcome === 'win' ? 'text-gold-100' : 'text-grey-300']}>

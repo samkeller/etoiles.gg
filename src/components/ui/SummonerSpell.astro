@@ -1,5 +1,6 @@
 ---
 import { summonerSpell } from '../../lib/lol/summoner-spells';
+import OpggIcon from './OpggIcon.astro';
 
 interface Props {
 	id: number | null;
@@ -15,6 +16,7 @@ const spell = summonerSpell(id);
 ) : (
 	<span class="grid size-5 place-items-center border border-grey-700 text-xs text-muted"
 		data-tip={id === null ? 'Sort non renseigné' : `Sort inconnu : ${id}`}>
-		?<span class="sr-only">{id === null ? 'Sort non renseigné' : `Sort inconnu : ${id}`}</span>
+		<OpggIcon name="ui-questionmark-circle" class="size-3.5" />
+		<span class="sr-only">{id === null ? 'Sort non renseigné' : `Sort inconnu : ${id}`}</span>
 	</span>
 )}

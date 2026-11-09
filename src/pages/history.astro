@@ -2,6 +2,7 @@
 import MatchRow from '../components/matches/MatchRow.astro';
 import SessionConstellation from '../components/memory/SessionConstellation.astro';
 import ChampionTile from '../components/ui/ChampionTile.astro';
+import OpggIcon from '../components/ui/OpggIcon.astro';
 import Panel from '../components/ui/Panel.astro';
 import SegmentedNav from '../components/ui/SegmentedNav.astro';
 import BaseLayout from '../layouts/BaseLayout.astro';
@@ -104,7 +105,7 @@ const yearOptions = [
 		{partialMatches.length > 0 && (
 			<details class="group border-t border-dashed border-white/15 pt-6">
 				<summary class="focus-ring flex cursor-pointer list-none items-center gap-3 [&::-webkit-details-marker]:hidden">
-					<span aria-hidden="true" class="size-2 rotate-45 border-t border-r border-gold-500 transition-transform group-open:rotate-135"></span>
+					<OpggIcon name="ui-expand-down" class="size-4 shrink-0 text-gold-500 transition-transform group-open:rotate-180" />
 					<h2 class="font-display text-xl text-ink">Parties incomplètes</h2>
 					<span class="text-sm tabular-nums text-muted" data-tip-title="Hors bilans collectifs" data-tip="De deux à quatre Étoiles : consultables ici, jamais comptées dans les statistiques à cinq.">{partialMatches.length}</span>
 				</summary>

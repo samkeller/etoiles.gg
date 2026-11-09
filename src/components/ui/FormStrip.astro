@@ -2,6 +2,7 @@
 import type { MatchSummary } from '../../lib/stats';
 import { formatDate, formatTime } from '../../lib/format';
 import MotionItem from './MotionItem.astro';
+import OpggIcon from './OpggIcon.astro';
 
 interface Props {
 	/** Résultats du plus ancien au plus récent. */
@@ -31,12 +32,9 @@ const streakStart = matches.length - streakCount;
 							inStreak && !isWin && 'border-grey-300/60',
 						]}
 					>
-						<img
-							src={isWin ? '/riot/misc/checkmark-gold2.svg' : '/riot/streaks/miniseries-loss-icon.svg'}
-							alt=""
-							width="24"
-							height="24"
-							class:list={['size-3.5 -rotate-45', !isWin && 'opacity-80']}
+						<OpggIcon
+							name={isWin ? 'ui-check' : 'ui-close'}
+							class={`size-3.5 -rotate-45 ${isWin ? 'text-gold-100' : 'text-grey-300 opacity-80'}`}
 						/>
 					</button>
 				</MotionItem>

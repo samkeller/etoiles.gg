@@ -1,9 +1,12 @@
 ---
+import type { OpggIconName } from '../../lib/opgg-icons';
+import OpggIcon from './OpggIcon.astro';
+
 interface Props {
 	label: string;
 	value: string;
-	/** Chemin d'une icône de /public, purement décorative. */
-	icon?: string;
+	/** Icône de /opgg/svg, purement décorative. */
+	icon?: OpggIconName;
 	size?: 'sm' | 'md';
 	/** Précision secondaire sous la valeur. */
 	hint?: string;
@@ -16,7 +19,7 @@ const { label, value, icon, size = 'md', hint } = Astro.props;
 	{
 		icon && (
 			<span class="grid size-10 shrink-0 rotate-45 place-items-center border border-gold-500/60 bg-night-950/60">
-				<img src={icon} alt="" width="20" height="20" class="size-5 -rotate-45 object-contain" />
+				<OpggIcon name={icon} class="size-5 -rotate-45" />
 			</span>
 		)
 	}

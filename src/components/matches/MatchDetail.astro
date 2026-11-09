@@ -14,6 +14,7 @@ import type { MatchDetail, MatchTeamObjectives } from "../../lib/stats";
 import UiIcon from "../ui/UiIcon.astro";
 import SummonerSpell from '../ui/SummonerSpell.astro';
 import StarPresence from '../ui/StarPresence.astro';
+import OpggIcon from '../ui/OpggIcon.astro';
 
 interface Props {
 	detail: MatchDetail;
@@ -31,7 +32,7 @@ const maxDamage = Math.max(
 const objectives: {
 	key: keyof MatchTeamObjectives;
 	label: string;
-	icon: 'towers' | 'inhibitors' | 'dragons' | 'heralds' | 'barons' | null;
+	icon: 'towers' | 'inhibitors' | 'dragons' | 'voidgrubs' | 'heralds' | 'barons';
 }[] = [
 	{
 		key: "towers",
@@ -50,7 +51,7 @@ const objectives: {
 	},
 	{
 		key: "voidgrubs",
-		icon: null,
+		icon: 'voidgrubs',
 		label: "Larves",
 	},
 	{
@@ -100,7 +101,7 @@ const objectives: {
 			rel="noopener noreferrer"
 			class="focus-ring label-caps inline-flex items-center gap-2 self-start border border-gold-500/60 px-3 py-2 text-gold-200 transition-colors hover:border-gold-200 hover:text-gold-100 sm:self-auto"
 		>
-			League of Graphs <span aria-hidden="true">↗</span>
+			League of Graphs <OpggIcon name="ui-arrow-right" class="size-3 -rotate-45" />
 		</a>
 	</header>
 
@@ -142,7 +143,7 @@ const objectives: {
 							</dd>
 						</div>
 						{objectives.map(({ key, label, icon }) => (
-							<div class="flex gap-1.5">
+							<div class="flex items-center gap-1.5">
 								{icon && <UiIcon key={icon} size="sm" />}
 								<dt class="text-muted">{label}</dt>
 								<dd class="font-semibold tabular-nums text-ink">
@@ -224,19 +225,19 @@ const objectives: {
 									</div>
 								</td>
 								<td class="py-2 pr-3 text-right tabular-nums text-muted max-sm:hidden">
-									<div class="flex justify-center align-middle gap-1">
+									<div class="flex justify-center items-center gap-1">
 										{participant.cs}
 										<UiIcon key="creepScore" size="md" />
 									</div>
 								</td>
 								<td class="py-2 pr-3 text-right tabular-nums text-muted max-md:hidden">
-									<div class="flex justify-center align-middle gap-1">
+									<div class="flex justify-center items-center gap-1">
 										{participant.vision}
 										<UiIcon key="vision" size="md" />
 									</div>
 								</td>
 								<td class="w-28 py-2 max-sm:hidden">
-									<div class="flex justify-end align-middle gap-1">
+									<div class="flex justify-end items-center gap-1">
 										<span class="block text-right text-xs tabular-nums text-muted">
 											{formatCompact(participant.damage)}
 										</span>

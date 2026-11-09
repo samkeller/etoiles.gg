@@ -2,6 +2,7 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import DraftSeat from '../components/draft/DraftSeat.astro';
 import ChampionIcon from '../components/ui/ChampionIcon.astro';
+import OpggIcon from '../components/ui/OpggIcon.astro';
 import Panel from '../components/ui/Panel.astro';
 import SectionHeading from '../components/ui/SectionHeading.astro';
 import { db } from '../lib/db/db';
@@ -68,10 +69,10 @@ const toolButton = 'focus-ring inline-flex min-h-9 items-center gap-2 border bor
 			</div>
 			<div class="flex gap-2">
 				<button id="draft-copy" type="button" disabled class:list={[toolButton, 'disabled:cursor-not-allowed disabled:opacity-40']}>
-					<span aria-hidden="true">⧉</span> <span data-copy-label>Copier le lien</span>
+					<OpggIcon name="ui-copy" class="size-3.5" /> <span data-copy-label>Copier le lien</span>
 				</button>
 				<button id="draft-reset" type="button" disabled class:list={[toolButton, 'disabled:cursor-not-allowed disabled:opacity-40']}>
-					<span aria-hidden="true">✕</span> Tout effacer
+					<OpggIcon name="ui-reset" class="size-3.5" /> Tout effacer
 				</button>
 			</div>
 		</header>
@@ -134,7 +135,7 @@ const toolButton = 'focus-ring inline-flex min-h-9 items-center gap-2 border bor
 											<span class="text-xs text-muted">{formatSince(composition.lastPlayedAt)}</span>
 										</button>
 										<a href={`/matches/${composition.matchIds[0]}`} class="focus-ring shrink-0 text-xs text-hextech-300 hover:text-ink"
-											data-tip={pluralize(composition.games, 'partie')} data-tip-title="Voir la dernière">↗</a>
+											data-tip={pluralize(composition.games, 'partie')} data-tip-title="Voir la dernière"><OpggIcon name="ui-arrow-right" class="size-3 -rotate-45" /></a>
 									</li>
 								))}
 							</ul>

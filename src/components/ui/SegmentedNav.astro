@@ -1,9 +1,12 @@
 ---
+import type { OpggIconName } from '../../lib/opgg-icons';
+import OpggIcon from './OpggIcon.astro';
+
 interface Option {
 	href: string;
 	label: string;
 	active: boolean;
-	icon?: string;
+	icon?: OpggIconName;
 	/** Bulle facultative, utile quand le libellé est masqué sur mobile. */
 	tip?: string;
 }
@@ -32,7 +35,7 @@ const { label, options, class: className } = Astro.props;
 							: 'text-muted hover:bg-white/5 hover:text-ink',
 					]}
 				>
-					{option.icon && <img src={option.icon} alt="" width="20" height="20" class:list={['size-4 object-contain', !option.active && 'opacity-70']} />}
+					{option.icon && <OpggIcon name={option.icon} class={option.active ? 'size-4' : 'size-4 opacity-70'} />}
 					{option.label}
 				</a>
 			</li>

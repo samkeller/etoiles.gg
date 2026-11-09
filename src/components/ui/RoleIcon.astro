@@ -1,15 +1,25 @@
 ---
 import { roleIcon, roleLabel } from '../../lib/lol';
 import type { Position } from '../../lib/types';
+import OpggIcon from './OpggIcon.astro';
 
 interface Props {
 	role: Position | null;
 	class?: string;
+	decorative?: boolean;
 	/** Détail ajouté sous le nom du rôle dans la bulle. */
 	tip?: string;
 }
 
-const { role, class: className = 'size-4', tip } = Astro.props;
+const { role, class: className = 'size-4', decorative = false, tip } = Astro.props;
 ---
 
-<img src={roleIcon(role)} alt={roleLabel(role)} data-tip-title={roleLabel(role)} data-tip={tip} width="34" height="34" class:list={['shrink-0 object-contain', className]} />
+<span
+	role={decorative ? undefined : 'img'}
+	aria-label={decorative ? undefined : roleLabel(role)}
+	data-tip-title={roleLabel(role)}
+	data-tip={tip}
+	class:list={['inline-block shrink-0', className]}
+>
+	<OpggIcon name={roleIcon(role)} class="size-full" />
+</span>

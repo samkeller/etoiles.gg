@@ -1,4 +1,6 @@
 ---
+import OpggIcon from './OpggIcon.astro';
+
 import type { HTMLAttributes } from 'astro/types';
 
 interface Props extends HTMLAttributes<'section'> {
@@ -23,7 +25,9 @@ const { as: Tag = 'section', divider = false, class: className, ...attributes } 
 	></span>
 	{
 		divider && (
-			<span aria-hidden="true" class="pointer-events-none absolute -top-2 left-1/2 -translate-x-1/2 bg-night-900 px-2 text-xs text-gold-200">✦</span>
+			<span aria-hidden="true" class="pointer-events-none absolute -top-2 left-1/2 -translate-x-1/2 bg-night-900 px-2">
+				<OpggIcon name="star" class="size-3 text-gold-200" />
+			</span>
 		)
 	}
 	<div class="relative">

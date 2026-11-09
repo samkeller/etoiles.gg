@@ -1,5 +1,6 @@
 ---
 import ChampionIcon from '../ui/ChampionIcon.astro';
+import OpggIcon from '../ui/OpggIcon.astro';
 import RoleIcon from '../ui/RoleIcon.astro';
 import WinRateComparison from '../ui/WinRateComparison.astro';
 import { championName } from '../../lib/lol';
@@ -47,7 +48,7 @@ const { observation, baseline, composition = false, minimumGames = 5 } = Astro.p
 			aria-label={`Ouvrir le dernier match de ${observation.members.map((member) => `${member.name} sur ${championName(member.champion)}`).join(' et ')}`}
 			class="focus-ring text-hextech-300 underline decoration-hextech-300/30 underline-offset-4 hover:decoration-hextech-300"
 		>
-			Dernier match <span aria-hidden="true">↗</span>
+			Dernier match <OpggIcon name="ui-arrow-right" class="size-3 -rotate-45" />
 		</button>
 	</div>
 </article>

@@ -1,15 +1,19 @@
 ---
+import type { OpggIconName } from '../../lib/opgg-icons';
+import OpggIcon from './OpggIcon.astro';
+
 const icons = {
-	kills: '/riot/ui/kills.png',
-	gold: '/riot/ui/icon_gold.png',
-	vision: '/riot/ui/ward.png',
-	towers: '/riot/ui/tower_building_blue.png',
-	inhibitors: '/riot/ui/inhibitor_building_blue.png',
-	dragons: '/riot/ui/dragon-100.png',
-	heralds: '/riot/ui/herald-100.png',
-	barons: '/riot/ui/nashor.png',
-	creepScore: '/riot/ui/creep.png',
-	damage: '/riot/ui/statistics/attack_damage.png',
+	kills: 'stat-kills',
+	gold: 'stat-gold',
+	vision: 'stat-vision',
+	towers: 'objective-tower',
+	inhibitors: 'objective-inhibitor',
+	dragons: 'objective-dragon',
+	heralds: 'objective-riftherald',
+	barons: 'objective-baronnashor',
+	voidgrubs: 'objective-voidgrub',
+	creepScore: 'stat-creep-score',
+	damage: 'stat-damage',
 } as const;
 
 interface Props {
@@ -18,6 +22,7 @@ interface Props {
 }
 
 const { key, size } = Astro.props;
+const icon = icons[key] satisfies OpggIconName;
 ---
 
-<img src={icons[key]} alt="" class:list={['object-contain opacity-70', size === 'sm' ? 'size-3' : size === 'md' ? 'size-4' : 'size-5']} />
+<OpggIcon name={icon} class={`${size === 'sm' ? 'size-3' : size === 'md' ? 'size-4' : 'size-5'} opacity-70`} />
