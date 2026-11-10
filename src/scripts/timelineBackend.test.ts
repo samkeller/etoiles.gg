@@ -4,7 +4,9 @@ import { addMatch, addPlayer, closeTestDatabases, createTestDatabase, fullLineup
 import type { MatchDto } from '../lib/types';
 import { getTeamStories } from '../lib/stats/moments';
 import { collectTimelines, TIMELINES_PER_RUN } from './timelineBackend';
-import { runHistory } from './syncBackend';
+import { readSyncStatus, runHistory } from './syncBackend';
+import { getMatchTimeline } from '../lib/stats/timelines';
+import { extractTimeline } from '../lib/timeline';
 
 afterEach(() => { closeTestDatabases(); vi.useRealTimers(); });
 function fixture(count = 1) {
@@ -104,5 +106,43 @@ describe('resumable timeline collection', () => {
 		}, 60);
 		expect(result).toMatchObject({ batches: 2, stopReason: 'complete', failures: 0 });
 		expect(result.status.timelines).toMatchObject({ pending: 0, collected: 11 });
+	});
+
+	it('refreshes legacy summaries within the same bounded queue while keeping them readable through failures', async () => {
+		vi.useFakeTimers(); vi.setSystemTime(1000);
+		const { db, raw } = fixture();
+		const { kills: _kills, ...summary } = extractTimeline(timelineFixture(raw('EUW1_1')), raw('EUW1_1'), 100);
+		db.prepare("INSERT INTO match_timelines (match_id, status, summary_json, updated_at) VALUES (?, 'ready', ?, 0)")
+			.run('EUW1_1', JSON.stringify({ ...summary, version: 1 }));
+		expect(readSyncStatus(db).timelines).toMatchObject({ collected: 1, pending: 1, ready: 1 });
+		expect(getMatchTimeline(db, 'EUW1_1').summary?.kills).toBeNull();
+		const get = vi.fn().mockRejectedValueOnce(new Error('HTTP 503'));
+		expect((await collectTimelines(db, get, () => true)).failures).toHaveLength(1);
+		expect(getMatchTimeline(db, 'EUW1_1').status).toBe('ready');
+		expect(readSyncStatus(db).timelines).toMatchObject({ collected: 1, pending: 1, ready: 0, nextRetryAt: 61000 });
+		await collectTimelines(db, get, () => true);
+		expect(get).toHaveBeenCalledTimes(1);
+		vi.setSystemTime(61000);
+		get.mockResolvedValueOnce(timelineFixture(raw('EUW1_1')));
+		expect(await collectTimelines(db, get, () => true)).toEqual({ collected: 1, unavailable: 0, failures: [] });
+		expect(getMatchTimeline(db, 'EUW1_1').summary?.kills).toEqual([]);
+		expect(readSyncStatus(db).timelines).toMatchObject({ collected: 1, pending: 0, ready: 0 });
+		await collectTimelines(db, get, () => true);
+		expect(get).toHaveBeenCalledTimes(2);
+	});
+
+	it('preserves legacy gold and objectives when Riot no longer provides the timeline and does not retry forever', async () => {
+		const { db, raw } = fixture();
+		const { kills: _kills, ...summary } = extractTimeline(timelineFixture(raw('EUW1_1')), raw('EUW1_1'), 100);
+		db.prepare("INSERT INTO match_timelines (match_id, status, summary_json, updated_at) VALUES (?, 'ready', ?, 0)")
+			.run('EUW1_1', JSON.stringify({ ...summary, version: 1 }));
+		const get = vi.fn().mockResolvedValue(null);
+		expect(await collectTimelines(db, get, () => true)).toEqual({ collected: 0, unavailable: 1, failures: [] });
+		expect(getMatchTimeline(db, 'EUW1_1')).toEqual({
+			status: 'ready', summary: { ...summary, version: 2, kills: null },
+		});
+		expect(readSyncStatus(db).timelines).toMatchObject({ collected: 1, pending: 0 });
+		await collectTimelines(db, get, () => true);
+		expect(get).toHaveBeenCalledTimes(1);
 	});
 });

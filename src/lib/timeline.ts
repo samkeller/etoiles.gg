@@ -11,10 +11,21 @@ export interface TimelineObjective {
 	ours: boolean | null;
 }
 
+export interface TimelineKill {
+	at: number;
+	killer: string | null;
+	victim: string;
+	ours: boolean | null;
+}
+
+export const TIMELINE_VERSION = 2;
+
 export interface CompactTimeline {
-	version: 1;
+	version: 1 | 2;
 	gold: GoldFrame[];
 	objectives: TimelineObjective[];
+	/** null means kills were not retained and could not yet, or can no longer, be fetched. */
+	kills: TimelineKill[] | null;
 }
 
 export const OBJECTIVE_LABELS: Record<TimelineObjective['kind'], string> = {
@@ -28,24 +39,27 @@ const integer = (value: unknown): value is number => typeof value === 'number' &
 const nonnegative = (value: unknown): value is number => integer(value) && value >= 0;
 const team = (value: unknown): value is TeamId => value === 100 || value === 200;
 
-/** Retain only observed frames and objectives, never inventory, positions or the raw payload. */
+/** Retain observed gold, objectives and champion kills, never identities or raw payloads. */
 export function extractTimeline(value: unknown, match: MatchDto, ourTeam: TeamId): CompactTimeline {
 	const fail = (): never => { throw new Error(`Invalid Riot timeline for ${match.metadata.matchId}.`); };
 	if (!record(value) || !record(value.metadata) || value.metadata.matchId !== match.metadata.matchId ||
 		!record(value.info) || !Array.isArray(value.info.participants) ||
 		value.info.participants.length !== 10 || !Array.isArray(value.info.frames) || value.info.frames.length < 2) return fail();
 	const sides = new Map<number, TeamId>();
+	const champions = new Map<number, string>();
 	const puuids = new Set<string>();
 	for (const item of value.info.participants) {
 		if (!record(item) || !integer(item.participantId) || item.participantId < 1 || item.participantId > 10 ||
 			typeof item.puuid !== 'string' || sides.has(item.participantId) || puuids.has(item.puuid)) return fail();
 		const participant = match.info.participants.find((candidate) => candidate.puuid === item.puuid);
-		if (!participant) return fail();
+		if (!participant || !/^[A-Za-z0-9]+$/.test(participant.championName)) return fail();
 		puuids.add(item.puuid);
 		sides.set(item.participantId, participant.teamId);
+		champions.set(item.participantId, participant.championName);
 	}
 	const gold: GoldFrame[] = [];
 	const objectives: TimelineObjective[] = [];
+	const kills: TimelineKill[] = [];
 	for (const frame of value.info.frames) {
 		if (!record(frame) || !nonnegative(frame.timestamp) ||
 			frame.timestamp > (match.info.gameDuration + 120) * 1000 ||
@@ -64,8 +78,20 @@ export function extractTimeline(value: unknown, match: MatchDto, ourTeam: TeamId
 		gold.push({ at: frame.timestamp, diff });
 		for (const event of frame.events) {
 			if (!record(event) || typeof event.type !== 'string') return fail();
-			if (event.type !== 'ELITE_MONSTER_KILL' && event.type !== 'BUILDING_KILL') continue;
+			if (!['ELITE_MONSTER_KILL', 'BUILDING_KILL', 'CHAMPION_KILL'].includes(event.type)) continue;
 			if (!nonnegative(event.timestamp) || event.timestamp > (match.info.gameDuration + 120) * 1000) return fail();
+			if (event.type === 'CHAMPION_KILL') {
+				if (!integer(event.victimId) || !champions.has(event.victimId) ||
+					!integer(event.killerId) || (event.killerId !== 0 && !champions.has(event.killerId))) return fail();
+				const side = sides.get(event.killerId);
+				kills.push({
+					at: event.timestamp,
+					killer: champions.get(event.killerId) ?? null,
+					victim: champions.get(event.victimId)!,
+					ours: side === undefined ? null : side === ourTeam,
+				});
+				continue;
+			}
 			let kind: TimelineObjective['kind'] | undefined;
 			if (event.type === 'ELITE_MONSTER_KILL') {
 				if (event.monsterType === 'DRAGON') kind = 'dragon';
@@ -86,13 +112,16 @@ export function extractTimeline(value: unknown, match: MatchDto, ourTeam: TeamId
 			objectives.push(objective);
 		}
 	}
-	return { version: 1, gold, objectives: objectives.sort((a, b) => a.at - b.at) };
+	return {
+		version: TIMELINE_VERSION, gold, objectives: objectives.sort((a, b) => a.at - b.at),
+		kills: kills.sort((a, b) => a.at - b.at),
+	};
 }
 
 export function parseCompactTimeline(json: string): CompactTimeline {
 	const value: unknown = JSON.parse(json);
 	const fail = (): never => { throw new Error('Invalid stored timeline summary.'); };
-	if (!record(value) || value.version !== 1 || !Array.isArray(value.gold) || value.gold.length < 2 ||
+	if (!record(value) || (value.version !== 1 && value.version !== TIMELINE_VERSION) || !Array.isArray(value.gold) || value.gold.length < 2 ||
 		!Array.isArray(value.objectives)) return fail();
 	const gold: GoldFrame[] = [];
 	for (const point of value.gold) {
@@ -107,5 +136,20 @@ export function parseCompactTimeline(json: string): CompactTimeline {
 			(item.ours !== true && item.ours !== false && item.ours !== null)) return fail();
 		objectives.push({ at: item.at, kind: item.kind as TimelineObjective['kind'], ours: item.ours });
 	}
-	return { version: 1, gold, objectives };
+	const kills: TimelineKill[] = [];
+	if (value.version === TIMELINE_VERSION) {
+		if (value.kills !== null && !Array.isArray(value.kills)) return fail();
+		for (const item of value.kills ?? []) {
+			if (!record(item) || !nonnegative(item.at) ||
+				(item.killer !== null && (typeof item.killer !== 'string' || !/^[A-Za-z0-9]+$/.test(item.killer))) ||
+				typeof item.victim !== 'string' || !/^[A-Za-z0-9]+$/.test(item.victim) ||
+				(item.ours !== true && item.ours !== false && item.ours !== null) ||
+				(item.killer === null && item.ours !== null)) return fail();
+			kills.push({ at: item.at, killer: item.killer, victim: item.victim, ours: item.ours });
+		}
+	}
+	return {
+		version: value.version, gold, objectives: objectives.sort((a, b) => a.at - b.at),
+		kills: value.version === 1 || value.kills === null ? null : kills.sort((a, b) => a.at - b.at),
+	};
 }

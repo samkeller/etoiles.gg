@@ -196,11 +196,19 @@ mêmes commandes `sync update` / `sync history`; `history --max-duration` traite
 lots dans son budget existant. `sync status` affiche aussi disponibles, absentes, prêtes,
 différées et prochaine reprise des timelines.
 
-Seuls l'écart d'or des dix participants à chaque relevé et les événements de dragons,
-barons, hérauts, larves, tours et inhibiteurs sont conservés. Le match et les dix PUUIDs
+Seuls l'écart d'or des dix participants à chaque relevé, les événements de dragons,
+barons, hérauts, larves, tours et inhibiteurs et les éliminations (heure, champions
+tueur/victime, équipe) sont conservés. Une élimination par l'environnement reste
+sans champion tueur ni équipe attribuée. Le match et les dix PUUIDs
 sont vérifiés avant extraction; les équipes sont résolues par identité, pas par l'ordre
 du tableau. Le JSON brut de timeline, les positions et les inventaires ne sont pas stockés.
 Un objectif dont l'auteur est inconnu reste non attribué.
+Les anciens résumés v1 restent lisibles et sont actualisés progressivement vers la v2
+par les mêmes lots de synchronisation, avec les mêmes limites et reprises sur erreur.
+Ils comptent à la fois comme disponibles et en attente d'actualisation dans `sync status`;
+aucun appel Riot n'est déclenché par la consultation du graphique.
+Si Riot ne fournit plus la timeline à l'actualisation, les anciens objectifs et relevés
+restent disponibles; les kills sont signalés indisponibles et la mise à jour n'est plus retentée.
 
 Un HTTP 404 marque une timeline absente chez Riot sans fabriquer un graphique.
 Les autres erreurs restent visibles dans les logs, font échouer le lot et sont différées
@@ -210,8 +218,21 @@ Un 429 arrête immédiatement les appels de timeline du lot. Les requêtes réut
 timeouts/retries et `Retry-After` du client Riot. Un lot déjà en cours peut dépasser
 le budget de programmation, comme pour les détails.
 
-La page de match et le dialog montrent l'écart d'or depuis le point de vue des Étoiles,
-les heures des objectifs et une liste accessible des relevés. Une victoire avec au moins
+La page de match et le dialog montrent un graphique à axes gradués de l'écart d'or
+depuis le point de vue des Étoiles : or au-dessus de zéro, bleu en dessous. Les objectifs
+et portraits des tueurs sont sur une seule ligne. Les événements proches sont regroupés
+en fenêtres temporelles adaptées à la largeur disponible, avec un compteur. Les bulles
+au survol, au focus ou au toucher détaillent tous les événements avec icônes d'objectifs,
+portraits tueur/victime, horaires exacts et couleurs d'équipe; les longues bulles sont
+défilables. Un marqueur bicolore regroupe les
+deux équipes. Des filtres séparent objectifs et kills et recalculent les agrégats.
+Survoler le graphique explore les relevés,
+cliquer en fixe un; un curseur natif permet aussi la navigation tactile et au clavier.
+Cliquer sur un marqueur fixe le relevé d'or observé le plus proche du début du groupe,
+sans inventer une valeur d'or à l'instant de l'événement. Sur mobile, la frise défile
+horizontalement. Il n'y a pas de version textuelle ni de panneau de détail séparé :
+les événements se consultent dans les bulles. Les éliminations absentes d'un résumé v1 sont signalées, pas
+présentées comme un total nul. Une victoire avec au moins
 5 000 or de retard observé devient un moment de retournement. C'est un maximum parmi
 les relevés Riot (généralement à la minute), pas une mesure continue ni une reconstitution.
 La Mémoire précise la couverture des timelines et des champs de multikill.

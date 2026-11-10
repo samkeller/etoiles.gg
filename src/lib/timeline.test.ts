@@ -82,4 +82,56 @@ describe('compact Match-V5 timeline', () => {
 		expect(() => parseCompactTimeline('{"version":2,"gold":[],"objectives":[]}')).toThrow();
 		expect(() => parseCompactTimeline('{"version":1,"gold":[{"at":0,"diff":0},{"at":0,"diff":2}],"objectives":[]}')).toThrow();
 	});
+
+	it('retains champion kills, including environmental deaths, in chronological order without player identities', () => {
+		const { match, timeline } = fixture();
+		const raw = { ...timeline, info: { ...timeline.info, frames: timeline.info.frames.map((frame, i) => ({
+			...frame, events: i === 1 ? [
+				{ type: 'CHAMPION_KILL', timestamp: 50000, killerId: 0, victimId: 2 },
+				{ type: 'CHAMPION_KILL', timestamp: 40000, killerId: 1, victimId: 6 },
+				{ type: 'CHAMPION_KILL', timestamp: 45000, killerId: 6, victimId: 1 },
+			] : [],
+		})) } };
+		const compact = extractTimeline(raw, match, 100);
+		expect(compact.version).toBe(2);
+		expect(compact.kills).toEqual([
+			{ at: 40000, killer: match.info.participants[0].championName, victim: match.info.participants[5].championName, ours: true },
+			{ at: 45000, killer: match.info.participants[5].championName, victim: match.info.participants[0].championName, ours: false },
+			{ at: 50000, killer: null, victim: match.info.participants[1].championName, ours: null },
+		]);
+		match.info.participants.reverse();
+		expect(extractTimeline(raw, match, 200).kills?.map((kill) => kill.ours)).toEqual([false, true, null]);
+		expect(parseCompactTimeline(JSON.stringify(compact))).toEqual(compact);
+		expect(JSON.stringify(compact)).not.toMatch(/puuid|riotId|position|inventory/);
+	});
+
+	it('rejects malformed or out-of-range champion kill events', () => {
+		const { match, timeline } = fixture();
+		for (const event of [
+			{ type: 'CHAMPION_KILL', timestamp: -1, killerId: 1, victimId: 6 },
+			{ type: 'CHAMPION_KILL', timestamp: 999999999, killerId: 1, victimId: 6 },
+			{ type: 'CHAMPION_KILL', timestamp: 40000, killerId: 11, victimId: 6 },
+			{ type: 'CHAMPION_KILL', timestamp: 40000, killerId: 1, victimId: 0 },
+		]) {
+			const raw = { ...timeline, info: { ...timeline.info, frames: timeline.info.frames.map((frame, i) => ({
+				...frame, events: i === 1 ? [event] : [],
+			})) } };
+			expect(() => extractTimeline(raw, match, 100)).toThrow('Invalid Riot timeline');
+		}
+	});
+
+	it('distinguishes missing historical kills from an observed empty kill list', () => {
+		const { match, timeline } = fixture();
+		const compact = extractTimeline(timeline, match, 100);
+		expect(compact.kills).toEqual([]);
+		const { kills: _kills, ...legacy } = compact;
+		expect(parseCompactTimeline(JSON.stringify({ ...legacy, version: 1 })).kills).toBeNull();
+		expect(() => parseCompactTimeline(JSON.stringify(legacy))).toThrow('Invalid stored timeline');
+		for (const kill of [
+			{ at: -1, killer: 'Ahri', victim: 'Jinx', ours: true },
+			{ at: 1000, killer: '../secret', victim: 'Jinx', ours: true },
+			{ at: 1000, killer: null, victim: 'Jinx', ours: true },
+			{ at: 1000, killer: 'Ahri', victim: '', ours: false },
+		]) expect(() => parseCompactTimeline(JSON.stringify({ ...compact, kills: [kill] }))).toThrow();
+	});
 });

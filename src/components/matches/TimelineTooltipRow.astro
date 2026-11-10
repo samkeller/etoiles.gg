@@ -1,0 +1,30 @@
+---
+import type { ChartEvent } from '../../lib/timelineChart';
+import type { OpggIconName } from '../../lib/opgg-icons';
+import { OBJECTIVE_LABELS } from '../../lib/timeline';
+import { formatDuration } from '../../lib/format';
+import { championName } from '../../lib/lol';
+import ChampionIcon from '../ui/ChampionIcon.astro';
+import OpggIcon from '../ui/OpggIcon.astro';
+
+interface Props { entry: ChartEvent; icon: OpggIconName; }
+const { entry, icon } = Astro.props;
+const { event } = entry;
+---
+<div data-timeline-tip-row data-event-type={entry.type} class="flex items-center gap-2 border-t border-white/10 py-2 first:border-0">
+	<time class="w-10 shrink-0 text-muted tabular-nums">{formatDuration(Math.floor(event.at / 1000))}</time>
+	<div class:list={['flex min-w-0 flex-1 flex-wrap items-center gap-1.5', event.ours === true ? 'text-gold-200' : event.ours === false ? 'text-hextech-300' : 'text-muted']}>
+		{entry.type === 'objective' ? <>
+			<OpggIcon name={icon} class="size-5" />
+			<span>{OBJECTIVE_LABELS[entry.event.kind]}</span>
+		</> : <>
+			{entry.event.killer ? <ChampionIcon champion={entry.event.killer} size="xs" tip={false} /> : <span>Environnement</span>}
+			<OpggIcon name="stat-kills" class="size-4" />
+			<ChampionIcon champion={entry.event.victim} size="xs" tip={false} />
+			<span class="text-ink">{entry.event.killer ? championName(entry.event.killer) : 'Environnement'} → {championName(entry.event.victim)}</span>
+		</>}
+	</div>
+	<span class:list={['shrink-0 text-[10px]', event.ours === true ? 'text-gold-200' : event.ours === false ? 'text-hextech-300' : 'text-muted']}>
+		{event.ours === true ? 'Étoiles' : event.ours === false ? 'Adversaires' : 'Neutre'}
+	</span>
+</div>

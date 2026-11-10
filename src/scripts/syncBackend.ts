@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3';
 import { parseRiotId } from '../lib/riot';
 import { ingest } from './ingestBackend';
+import { TIMELINE_VERSION } from '../lib/timeline';
 
 export const SYNC_HELP = `Usage:
   npm run sync -- setup ["Name#TAG" ...]
@@ -103,12 +104,14 @@ export function readSyncStatus(database: Database.Database, queues: readonly num
 		}[];
 	const cursors = rows.filter((row) => queues.includes(row.queueId));
 	const timelines = database.prepare(`SELECT
-		COUNT(CASE WHEN status = 'pending' THEN 1 END) AS pending,
-		COUNT(CASE WHEN status = 'pending' AND next_attempt_at <= ? THEN 1 END) AS ready,
+		COUNT(CASE WHEN needs_refresh THEN 1 END) AS pending,
+		COUNT(CASE WHEN needs_refresh AND next_attempt_at <= ? THEN 1 END) AS ready,
 		COUNT(CASE WHEN status = 'ready' THEN 1 END) AS collected,
 		COUNT(CASE WHEN status = 'unavailable' THEN 1 END) AS unavailable,
-		MIN(CASE WHEN status = 'pending' AND next_attempt_at > ? THEN next_attempt_at END) AS nextRetryAt
-		FROM match_timelines`).get(now, now) as {
+		MIN(CASE WHEN needs_refresh AND next_attempt_at > ? THEN next_attempt_at END) AS nextRetryAt
+		FROM (SELECT *, (status = 'pending' OR
+			(status = 'ready' AND json_extract(summary_json, '$.version') < ${TIMELINE_VERSION})) AS needs_refresh
+			FROM match_timelines)`).get(now, now) as {
 			pending: number; ready: number; collected: number; unavailable: number; nextRetryAt: number | null;
 		};
 	const collectionComplete = cursors.length > 0 && cursors.every((row) => row.isComplete === 1);
