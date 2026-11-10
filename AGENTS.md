@@ -1,3 +1,11 @@
+## UX
+
+Lire et appliquer [UX_PRINCIPLES.md](./UX_PRINCIPLES.md) pour les interventions dans ce dépôt, quel que soit le modèle utilisé, y compris via OpenRouter. Si l'hôte ne charge pas les références, ouvrir explicitement ce fichier avant de travailler ; le transmettre aux sous-agents concernés.
+
+@UX_PRINCIPLES.md
+
+Dans VS Code, les paramètres du workspace activent `AGENTS.md` et les références liées. Vérifier leur inclusion dans les références/instructions d'une nouvelle conversation (Copilot CLI : `/instructions`) ; un lien seul ne prouve pas le chargement. Pour un autre hôte, configurer son point d'entrée natif pour lire ce fichier.
+
 ## Development
 
 When starting the dev server, use background mode:
