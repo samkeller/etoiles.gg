@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3';
 import { SCHEMA } from './schema';
 
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 interface Migration {
 	version: number;
@@ -147,6 +147,21 @@ const migrations: readonly Migration[] = [
 				UPDATE data_revision SET version = version + 1 WHERE id = 1;
 			END;
 			CREATE TRIGGER timelines_revision_delete AFTER DELETE ON match_timelines BEGIN
+				UPDATE data_revision SET version = version + 1 WHERE id = 1;
+			END;
+		`,
+	},
+	{
+		version: 7,
+		sql: `
+			ALTER TABLE matches ADD COLUMN match_kind TEXT NOT NULL DEFAULT 'team'
+				CHECK (match_kind IN ('team', 'collision'));
+			DROP TRIGGER matches_revision_update;
+			CREATE TRIGGER matches_revision_update AFTER UPDATE ON matches
+			WHEN OLD.match_id IS NOT NEW.match_id OR OLD.game_start_ts IS NOT NEW.game_start_ts OR
+				OLD.duration_s IS NOT NEW.duration_s OR OLD.queue_id IS NOT NEW.queue_id OR
+				OLD.raw_json IS NOT NEW.raw_json OR OLD.match_kind IS NOT NEW.match_kind
+			BEGIN
 				UPDATE data_revision SET version = version + 1 WHERE id = 1;
 			END;
 		`,

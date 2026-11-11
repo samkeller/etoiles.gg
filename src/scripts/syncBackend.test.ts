@@ -28,6 +28,11 @@ describe('sync argument validation', () => {
 		expect(parseSyncArgs(['history'])).toEqual({ command: 'history' });
 		expect(parseSyncArgs(['history', '--max-duration', '0.5'])).toEqual({ command: 'history', maxDurationSeconds: 0.5 });
 		expect(parseSyncArgs(['history', '--max-duration', '86400'])).toEqual({ command: 'history', maxDurationSeconds: 86400 });
+		expect(parseSyncArgs(['history', '--since', '2026-11-07'])).toEqual({ command: 'history', since: '2026-11-07' });
+		expect(parseSyncArgs(['history', '--since', '2026-11-07', '--max-duration', '120']))
+			.toEqual({ command: 'history', since: '2026-11-07', maxDurationSeconds: 120 });
+		expect(parseSyncArgs(['history', '--max-duration', '120', '--since', '2026-11-07']))
+			.toEqual({ command: 'history', since: '2026-11-07', maxDurationSeconds: 120 });
 	});
 
 	it.each([
@@ -38,6 +43,11 @@ describe('sync argument validation', () => {
 		['history', '--max-duration', '1s'], ['history', '--max-duration', ''],
 		['history', '--max-duration', '1', '--max-duration', '2'],
 		['history', '--loop'], ['help', 'extra'],
+		['history', '--since'], ['history', '--since', '2026-02-30'],
+		['history', '--since', '2025-02-29'], ['history', '--since', '2026-13-01'],
+		['history', '--since', '2026-11-00'], ['history', '--since', '2026-11-07T00:00:00Z'],
+		['history', '--since', '1969-12-31'], ['history', '--since', '9999-01-01'],
+		['history', '--since', '2026-11-07', '--since', '2026-11-08'],
 	])('rejects invalid arguments %j', (...args) => {
 		expect(() => parseSyncArgs(args)).toThrow();
 	});
@@ -90,6 +100,115 @@ describe('setup', () => {
 });
 
 describe('history and summaries', () => {
+	it('rescans both queues despite completed history and preserves all cursors and existing rows', async () => {
+		const database = createTestDatabase();
+		addPlayer(database, 'player-0', 'Player');
+		addMatch(database, { id: 'EUW1_1', startedAt: 100, won: true, members: fullLineup().slice(0, 1) });
+		database.exec(`INSERT INTO ingest_backfill_cursors VALUES ('player-0', 440, 500, 1, 123);
+			INSERT INTO ingest_backfill_cursors VALUES ('player-0', 420, 300, 1, 123);
+			INSERT INTO ingest_cursors VALUES ('player-0', 999999);
+			INSERT INTO individual_ingest_cursors VALUES ('player-0', 420, 999999)`);
+		const tables = ['ingest_backfill_cursors', 'ingest_cursors', 'individual_ingest_cursors'];
+		const before = tables.map((table) => database.prepare(`SELECT * FROM ${table}`).all());
+		const existing = database.prepare("SELECT * FROM matches WHERE match_id = 'EUW1_1'").get();
+		const page = Array.from({ length: 100 }, (_, i) => `EUW1_${i + 1}`);
+		const client = {
+			getFlexMatchIds: vi.fn().mockResolvedValueOnce(page).mockResolvedValueOnce(['EUW1_101']),
+			getRankedMatchIds: vi.fn().mockResolvedValue(['EUW1_420']),
+			getMatch: vi.fn(async (id: string) => match(id, id === 'EUW1_420' ? 420 : 440)),
+		};
+		const result = await runHistory(database, client, 120, () => {}, () => {}, '2026-11-07');
+		expect(result).toMatchObject({ batches: 2, failures: 0, stopReason: 'complete' });
+		const startTime = Date.parse('2026-11-07T00:00:00Z') / 1000;
+		expect(client.getFlexMatchIds.mock.calls).toEqual([
+			['player-0', { start: 0, count: 100, startTime, queue: 440 }],
+			['player-0', { start: 100, count: 100, startTime, queue: 440 }],
+		]);
+		expect(client.getRankedMatchIds).toHaveBeenCalledExactlyOnceWith('player-0', { start: 0, count: 100, startTime, queue: 420 });
+		expect(client.getMatch).not.toHaveBeenCalledWith('EUW1_1');
+		expect(database.prepare("SELECT * FROM matches WHERE match_id = 'EUW1_1'").get()).toEqual(existing);
+		expect(database.prepare('SELECT COUNT(*) AS count FROM matches').get()).toEqual({ count: 102 });
+		for (const [index, table] of tables.entries()) expect(database.prepare(`SELECT * FROM ${table}`).all()).toEqual(before[index]);
+		expect(formatSyncStatus(result.status, '2026-11-07').join('\n')).toContain('Rattrapage terminé');
+	});
+
+	it('persists collected IDs at a budget interruption and rescans safely on relaunch', async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-11-11T12:00:00Z'));
+		const database = createTestDatabase();
+		addPlayer(database, 'player-0', 'Player');
+		const page = Array.from({ length: 100 }, (_, i) => `EUW1_${i}`);
+		const client = {
+			getFlexMatchIds: vi.fn().mockImplementationOnce(async () => {
+				vi.setSystemTime(new Date('2026-11-11T12:00:02Z'));
+				return page;
+			}),
+			getMatch: vi.fn(async (id: string) => match(id)),
+		};
+		const first = await runHistory(database, client, 1, () => {}, () => {}, '2026-11-07');
+		expect(first).toMatchObject({ stopReason: 'budget', status: { collectionComplete: false, pendingRemaining: 100 } });
+		expect(client.getMatch).not.toHaveBeenCalled();
+		expect(database.prepare('SELECT * FROM ingest_backfill_cursors').all()).toEqual([]);
+		client.getFlexMatchIds.mockResolvedValueOnce(page).mockResolvedValueOnce([]);
+		const resumed = await runHistory(database, client, 120, () => {}, () => {}, '2026-11-07');
+		expect(resumed).toMatchObject({ stopReason: 'complete', failures: 0 });
+		expect(client.getFlexMatchIds.mock.calls.map((call) => call[1].start)).toEqual([0, 0, 100]);
+		expect(database.prepare('SELECT COUNT(*) AS count FROM matches').get()).toEqual({ count: 100 });
+	});
+
+	it('does not bypass deferred retries during a dated rescan', async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-11-11T12:00:00Z'));
+		const database = createTestDatabase();
+		addPlayer(database, 'player-0', 'Player');
+		const nextRetry = Date.now() + 60000;
+		database.prepare('INSERT INTO ingest_pending VALUES (?, 3, ?)').run('EUW1_1', nextRetry);
+		const client = { getFlexMatchIds: vi.fn().mockResolvedValue(['EUW1_1']), getMatch: vi.fn() };
+		const result = await runHistory(database, client, 120, () => {}, () => {}, '2026-11-07');
+		expect(result).toMatchObject({ stopReason: 'deferred', failures: 0, status: { nextRetryAt: nextRetry } });
+		expect(database.prepare('SELECT * FROM ingest_pending').get()).toEqual({
+			match_id: 'EUW1_1', attempts: 3, next_attempt_at: nextRetry,
+		});
+		expect(client.getMatch).not.toHaveBeenCalled();
+	});
+
+	it('stops a dated rescan on rate limits without declaring collection complete', async () => {
+		const database = createTestDatabase();
+		addPlayer(database, 'player-0', 'Player');
+		const client = { getFlexMatchIds: vi.fn().mockRejectedValue(new RateLimitError('HTTP 429')), getMatch: vi.fn() };
+		expect(await runHistory(database, client, 120, () => {}, () => {}, '2026-11-07'))
+			.toMatchObject({ stopReason: 'failed', failures: 1, status: { collectionComplete: false } });
+		expect(client.getFlexMatchIds).toHaveBeenCalledTimes(1);
+		expect(client.getMatch).not.toHaveBeenCalled();
+	});
+
+	it('does not report dated catch-up as complete with an empty roster', async () => {
+		const database = createTestDatabase();
+		const client = { getFlexMatchIds: vi.fn(), getMatch: vi.fn() };
+		expect(await runHistory(database, client, 120, () => {}, () => {}, '2026-11-07'))
+			.toMatchObject({ stopReason: 'failed', failures: 1, status: { collectionComplete: false, historyComplete: false } });
+		expect(client.getFlexMatchIds).not.toHaveBeenCalled();
+	});
+
+	it('retains pages already collected on a rate limit and imports them once after relaunch', async () => {
+		const database = createTestDatabase();
+		addPlayer(database, 'player-0', 'Player');
+		const page = Array.from({ length: 100 }, (_, i) => `EUW1_${i}`);
+		const client = {
+			getFlexMatchIds: vi.fn().mockResolvedValueOnce(page).mockRejectedValueOnce(new RateLimitError('HTTP 429')),
+			getMatch: vi.fn(async (id: string) => match(id)),
+		};
+		expect(await runHistory(database, client, 120, () => {}, () => {}, '2026-11-07'))
+			.toMatchObject({ stopReason: 'failed', failures: 1, status: { pendingRemaining: 100, collectionComplete: false } });
+		expect(client.getMatch).not.toHaveBeenCalled();
+		client.getFlexMatchIds.mockResolvedValueOnce(page).mockResolvedValueOnce([]);
+		expect(await runHistory(database, client, 120, () => {}, () => {}, '2026-11-07'))
+			.toMatchObject({ stopReason: 'complete', failures: 0 });
+		expect(client.getMatch).toHaveBeenCalledTimes(100);
+		expect(database.prepare('SELECT COUNT(*) AS count FROM matches').get()).toEqual({ count: 100 });
+		expect(database.prepare('SELECT * FROM ingest_pending').all()).toEqual([]);
+	});
+
 	it('reports pagination, persisted imports, ranks, timelines and batch boundaries as work happens', async () => {
 		const database = createTestDatabase();
 		for (const member of fullLineup()) addPlayer(database, member.puuid, member.puuid);

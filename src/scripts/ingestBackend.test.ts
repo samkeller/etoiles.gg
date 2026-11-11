@@ -3,6 +3,9 @@ import { addMatch, addPlayer, closeTestDatabases, createTestDatabase, fullLineup
 import type { MatchDto } from '../lib/types';
 import { ingest } from './ingestBackend';
 import { RateLimitError } from '../lib/backendHttp';
+import { getMatchDetail, getMatches } from '../lib/stats/matches';
+import { getIndividualProfiles } from '../lib/stats/individual';
+import { getPlayers } from '../lib/stats/players';
 
 afterEach(closeTestDatabases);
 
@@ -13,7 +16,73 @@ function raw(id: string, startedAt = 100): MatchDto {
 	return JSON.parse(row.raw_json);
 }
 
+function collision(id: string): MatchDto {
+	const match = raw(id);
+	const opponent = match.info.participants.find((participant) => participant.puuid === 'player-1')!;
+	const replacement = match.info.participants.find((participant) => participant.puuid === 'enemy-0')!;
+	opponent.teamId = 200;
+	opponent.win = false;
+	replacement.teamId = 100;
+	replacement.win = true;
+	return match;
+}
+
 describe('ingestion', () => {
+	it('stores collisions as raw matches without admitting them to team stats and does not refetch them', async () => {
+		const database = createTestDatabase();
+		addPlayer(database, 'player-0', 'Étoile bleue');
+		addPlayer(database, 'player-1', 'Étoile rouge');
+		const match = collision('EUW1_7826789164');
+		const client = {
+			getFlexMatchIds: vi.fn().mockResolvedValue(['EUW1_7826789164']),
+			getMatch: vi.fn().mockResolvedValue(match),
+		};
+
+		expect(await ingest(database, client)).toMatchObject({
+			newMatches: 0,
+			importedByQueue: { 440: 1 },
+			failures: [],
+			pendingRemaining: 0,
+		});
+		expect(database.prepare(`SELECT match_kind AS matchKind, raw_json AS rawJson FROM matches WHERE match_id = ?`)
+			.get('EUW1_7826789164')).toEqual({ matchKind: 'collision', rawJson: JSON.stringify(match) });
+		expect(database.prepare('SELECT COUNT(*) AS count FROM participants WHERE match_id = ?').get('EUW1_7826789164'))
+			.toEqual({ count: 0 });
+		expect(database.prepare('SELECT COUNT(*) AS count FROM ingest_pending').get()).toEqual({ count: 0 });
+
+		database.prepare(`INSERT INTO participants
+			(match_id, puuid, champion, role, kills, deaths, assists, win, lineup_size)
+			VALUES (?, ?, 'Aatrox', 'TOP', 1, 0, 0, ?, 2)`).run('EUW1_7826789164', 'player-0', 1);
+		database.prepare(`INSERT INTO participants
+			(match_id, puuid, champion, role, kills, deaths, assists, win, lineup_size)
+			VALUES (?, ?, 'Ahri', 'TOP', 0, 1, 0, ?, 2)`).run('EUW1_7826789164', 'player-1', 0);
+		expect(getMatches(database)).toEqual([]);
+		expect(getPlayers(database).map((player) => player.games)).toEqual([0, 0]);
+		expect(getIndividualProfiles(database).map((profile) => ({
+			puuid: profile.puuid, games: profile.flex.games, wins: profile.flex.wins,
+			winRate: profile.flex.winRate, teamSize: profile.flex.recentMatches[0].teamSize,
+		}))).toEqual([
+			{ puuid: 'player-0', games: 1, wins: 1, winRate: 1, teamSize: 1 },
+			{ puuid: 'player-1', games: 1, wins: 0, winRate: 0, teamSize: 1 },
+		]);
+		const detail = getMatchDetail(database, 'EUW1_7826789164');
+		expect(detail?.isCollision).toBe(true);
+		expect(detail?.teams.map((team) => ({
+			side: team.side, isOurs: team.isOurs, members: team.participants.filter((participant) => participant.isMember).length,
+		}))).toEqual([
+			{ side: 'blue', isOurs: false, members: 1 },
+			{ side: 'red', isOurs: false, members: 1 },
+		]);
+
+		client.getMatch.mockClear();
+		expect((await ingest(database, client)).failures).toEqual([]);
+		expect(client.getMatch).not.toHaveBeenCalled();
+		expect(database.prepare('SELECT COUNT(*) AS count FROM participants').get()).toEqual({ count: 0 });
+		client.getFlexMatchIds.mockResolvedValue([]);
+		await ingest(database, client);
+		expect(database.prepare('SELECT COUNT(*) AS count FROM ingest_pending').get()).toEqual({ count: 0 });
+	});
+
 	it('stops collecting on a rate limit and retains collected IDs and the unfinished cursor', async () => {
 		const database = createTestDatabase();
 		addPlayer(database, 'player-0', 'Original');

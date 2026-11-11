@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { createTestDatabase, closeTestDatabases } from '../lib/stats/fixtures';
+import { addPlayer, createTestDatabase, closeTestDatabases } from '../lib/stats/fixtures';
 import * as riot from '../lib/riot';
 import { executeSyncCommand } from './syncCli';
 
@@ -73,5 +73,23 @@ it('keeps status output free of progress logs and timers', async () => {
 	await executeSyncCommand({ command: 'status' });
 	expect(console.log).toHaveBeenCalledWith(expect.stringContaining('File d’attente'));
 	expect(JSON.stringify(vi.mocked(console.log).mock.calls)).not.toContain('Configuration');
+	expect(vi.getTimerCount()).toBe(0);
+});
+
+it('passes the dated window through the CLI and reports catch-up instead of completed global cursors', async () => {
+	vi.setSystemTime(new Date('2026-11-11T12:00:00Z'));
+	addPlayer(state.database!, 'player-0', 'Player');
+	state.database!.exec(`INSERT INTO ingest_backfill_cursors VALUES ('player-0', 440, 100, 1, 0);
+		INSERT INTO ingest_backfill_cursors VALUES ('player-0', 420, 100, 1, 0)`);
+	const flex = vi.spyOn(riot, 'getFlexMatchIds').mockResolvedValue([]);
+	const solo = vi.spyOn(riot, 'getRankedMatchIds').mockResolvedValue([]);
+	vi.spyOn(riot, 'getRankEntries').mockResolvedValue([]);
+	vi.spyOn(riot, 'getTimeline').mockResolvedValue(null);
+	await executeSyncCommand({ command: 'history', since: '2026-11-07', maxDurationSeconds: 120 });
+	const startTime = Date.parse('2026-11-07T00:00:00Z') / 1000;
+	expect(flex).toHaveBeenCalledWith('player-0', { start: 0, count: 100, startTime, queue: 440 }, expect.any(Object));
+	expect(solo).toHaveBeenCalledWith('player-0', { start: 0, count: 100, startTime, queue: 420 }, expect.any(Object));
+	expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Rattrapage terminé'));
+	expect(JSON.stringify(vi.mocked(console.log).mock.calls)).not.toContain('Aucun joueur enregistré');
 	expect(vi.getTimerCount()).toBe(0);
 });

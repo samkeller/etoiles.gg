@@ -13,6 +13,17 @@ function removeRevisionTracking(database: Database.Database): void {
 	database.exec('DROP TABLE data_revision');
 }
 
+function removeMatchKind(database: Database.Database, hasRevisionTrigger = false): void {
+	if (hasRevisionTrigger) database.exec('DROP TRIGGER matches_revision_update');
+	database.exec('ALTER TABLE matches DROP COLUMN match_kind');
+	if (hasRevisionTrigger) database.exec(`CREATE TRIGGER matches_revision_update AFTER UPDATE ON matches
+		WHEN OLD.match_id IS NOT NEW.match_id OR OLD.game_start_ts IS NOT NEW.game_start_ts OR
+			OLD.duration_s IS NOT NEW.duration_s OR OLD.queue_id IS NOT NEW.queue_id OR OLD.raw_json IS NOT NEW.raw_json
+		BEGIN
+			UPDATE data_revision SET version = version + 1 WHERE id = 1;
+		END`);
+}
+
 afterEach(() => {
 	database?.close();
 	database = undefined;
@@ -24,7 +35,8 @@ describe('database migrations', () => {
 		database.exec(SCHEMA);
 		addPlayer(database, 'player-0', 'Étoile');
 		addMatch(database, { id: 'EUW1_123', startedAt: 123, won: true, members: fullLineup() });
-		const historicalMatch = database.prepare('SELECT * FROM matches').get();
+		const historicalMatch = database.prepare(`SELECT match_id, game_start_ts, duration_s, queue_id, raw_json
+			FROM matches`).get();
 		const historicalMembers = database.prepare('SELECT * FROM participants ORDER BY puuid').all();
 
 		migrateDatabase(database);
@@ -36,7 +48,9 @@ describe('database migrations', () => {
 		expect(database.prepare('SELECT COUNT(*) AS count FROM rank_snapshots').get()).toEqual({ count: 0 });
 		expect(database.prepare('SELECT COUNT(*) AS count FROM individual_ingest_cursors').get()).toEqual({ count: 0 });
 		expect(database.prepare('SELECT COUNT(*) AS count FROM ingest_backfill_cursors').get()).toEqual({ count: 0 });
-		expect(database.prepare('SELECT * FROM matches').get()).toEqual(historicalMatch);
+		expect(database.prepare(`SELECT match_id, game_start_ts, duration_s, queue_id, raw_json
+			FROM matches`).get()).toEqual(historicalMatch);
+		expect(database.prepare('SELECT match_kind AS matchKind FROM matches').get()).toEqual({ matchKind: 'team' });
 		expect(database.prepare('SELECT * FROM participants ORDER BY puuid').all()).toEqual(historicalMembers);
 	});
 
@@ -48,6 +62,7 @@ describe('database migrations', () => {
 		database.exec(`DROP TABLE ingest_backfill_cursors;
 			ALTER TABLE ingest_pending DROP COLUMN attempts;
 			ALTER TABLE ingest_pending DROP COLUMN next_attempt_at;`);
+		removeMatchKind(database);
 		addPlayer(database, 'player-0', 'Étoile');
 		addMatch(database, { id: 'EUW1_123', startedAt: 123, won: true, members: fullLineup() });
 		database.pragma('user_version = 1');
@@ -68,6 +83,7 @@ describe('database migrations', () => {
 		database.exec(`DROP TABLE ingest_backfill_cursors;
 			ALTER TABLE ingest_pending DROP COLUMN attempts;
 			ALTER TABLE ingest_pending DROP COLUMN next_attempt_at;`);
+		removeMatchKind(database);
 		database.prepare('INSERT INTO ingest_pending (match_id) VALUES (?)').run('EUW1_123');
 		database.exec(`CREATE TABLE ingest_backfill_cursors (
 			puuid TEXT NOT NULL,
@@ -112,6 +128,7 @@ describe('database migrations', () => {
 		database = new Database(':memory:');
 		migrateDatabase(database);
 		database.exec('DROP TABLE match_timelines');
+		removeMatchKind(database, true);
 		database.pragma('user_version = 5');
 		addPlayer(database, 'player-0', 'Étoile');
 		addMatch(database, { id: 'EUW1_123', startedAt: 123, won: true, members: fullLineup() });
@@ -122,18 +139,26 @@ describe('database migrations', () => {
 		migrateDatabase(database);
 		migrateDatabase(database);
 		for (const [index, table] of ['matches', 'participants', 'rank_snapshots', 'ingest_pending'].entries()) {
-			expect(database.prepare(`SELECT * FROM ${table}`).all()).toEqual(before[index]);
+			const rows = table === 'matches'
+				? database.prepare('SELECT match_id, game_start_ts, duration_s, queue_id, raw_json FROM matches').all()
+				: database.prepare(`SELECT * FROM ${table}`).all();
+			expect(rows).toEqual(before[index]);
 		}
+		expect(database.prepare('SELECT match_kind AS matchKind FROM matches').get()).toEqual({ matchKind: 'team' });
 		const version = () => (database!.prepare('SELECT version FROM data_revision').get() as { version: number }).version;
 		const base = version();
-		database.exec("INSERT INTO match_timelines (match_id, updated_at) VALUES ('EUW1_123', 0)");
+		database.prepare("UPDATE matches SET match_kind = 'collision' WHERE match_id = 'EUW1_123'").run();
 		expect(version()).toBe(base + 1);
-		database.exec("UPDATE match_timelines SET attempts = 1, next_attempt_at = 1000, last_error = '503', updated_at = 1");
-		expect(version()).toBe(base + 1);
-		database.exec("UPDATE match_timelines SET status = 'unavailable'");
+		database.prepare("UPDATE matches SET match_kind = 'team' WHERE match_id = 'EUW1_123'").run();
 		expect(version()).toBe(base + 2);
-		database.exec('DELETE FROM match_timelines');
+		database.exec("INSERT INTO match_timelines (match_id, updated_at) VALUES ('EUW1_123', 0)");
 		expect(version()).toBe(base + 3);
+		database.exec("UPDATE match_timelines SET attempts = 1, next_attempt_at = 1000, last_error = '503', updated_at = 1");
+		expect(version()).toBe(base + 3);
+		database.exec("UPDATE match_timelines SET status = 'unavailable'");
+		expect(version()).toBe(base + 4);
+		database.exec('DELETE FROM match_timelines');
+		expect(version()).toBe(base + 5);
 	});
 
 	it('rejects future versions without modifying the database', () => {
@@ -156,6 +181,7 @@ describe('database migrations', () => {
 		database = new Database(':memory:');
 		migrateDatabase(database);
 		removeRevisionTracking(database);
+		removeMatchKind(database);
 		database.exec('ALTER TABLE ingest_runs DROP COLUMN finished_at');
 		addPlayer(database, 'player-0', 'Étoile');
 		addMatch(database, { id: 'EUW1_123', startedAt: 123, won: true, members: fullLineup() });
@@ -171,8 +197,12 @@ describe('database migrations', () => {
 		database.pragma('user_version = 3');
 		migrateDatabase(database);
 		for (const [index, table] of tables.entries()) {
-			expect(database.prepare(`SELECT * FROM ${table}`).all()).toEqual(previous[index]);
+			const rows = table === 'matches'
+				? database.prepare('SELECT match_id, game_start_ts, duration_s, queue_id, raw_json FROM matches').all()
+				: database.prepare(`SELECT * FROM ${table}`).all();
+			expect(rows).toEqual(previous[index]);
 		}
+		expect(database.prepare('SELECT match_kind AS matchKind FROM matches').get()).toEqual({ matchKind: 'team' });
 		expect(database.prepare('SELECT * FROM ingest_runs').get())
 			.toEqual({ started_at: 100, new_matches: 2, status: 'ok', finished_at: null });
 	});

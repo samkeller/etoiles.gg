@@ -13,8 +13,8 @@ export const prerender = false;
 const id = Astro.params.id ?? '';
 const match = getMatchDetail(db, id);
 if (!match) return new Response('Match introuvable.', { status: 404 });
-const result = match.outcome === 'win' ? 'Victoire' : 'Défaite';
-const fullTeam = match.queueId === 440 && match.lineupSize === 5;
+const result = match.isCollision ? 'Collision stellaire' : match.outcome === 'win' ? 'Victoire' : 'Défaite';
+const fullTeam = !match.isCollision && match.queueId === 440 && match.lineupSize === 5;
 ---
 
 <BaseLayout title={`${result} · ${formatDate(match.startedAt)} — ${SITE_NAME}`} description={`Le récit de notre match du ${formatDate(match.startedAt)} : composition, statistiques, objectifs et patch ${match.patch}.`}>
@@ -25,7 +25,7 @@ const fullTeam = match.queueId === 440 && match.lineupSize === 5;
 			</a>
 		</nav>
 		<header class="max-w-3xl">
-			<p class="label-caps text-gold-200">{match.queueId === 420 ? 'Solo/Duo classée' : 'Classé flexible'} · patch {match.patch}</p>
+			<p class="label-caps text-gold-200">{match.isCollision ? 'Collision stellaire' : match.queueId === 420 ? 'Solo/Duo classée' : 'Classé flexible'} · patch {match.patch}</p>
 			<h1 class="mt-2 font-display text-4xl font-medium tracking-tight text-ink sm:text-5xl">{result} · {formatDate(match.startedAt)}</h1>
 		</header>
 		<Panel class="p-4 sm:p-8">

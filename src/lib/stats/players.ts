@@ -107,7 +107,7 @@ function queryPlayers(database: Database.Database): PlayerProfile[] {
 			SELECT m.match_id AS id, m.game_start_ts AS startedAt, m.duration_s AS durationS,
 				m.queue_id AS queueId, m.raw_json AS rawJson
 			FROM matches AS m
-			WHERE m.queue_id = 440 AND (
+			WHERE m.queue_id = 440 AND m.match_kind = 'team' AND (
 				EXISTS (SELECT 1 FROM participants AS p WHERE p.match_id = m.match_id AND p.lineup_size = 5)
 				OR (SELECT COUNT(*) FROM participants AS p WHERE p.match_id = m.match_id) >= 5
 			)
@@ -118,7 +118,8 @@ function queryPlayers(database: Database.Database): PlayerProfile[] {
 	const lines = new Map<string, GameLine[]>(players.map((player) => [player.puuid, []]));
 	const storedRows = database.prepare(`SELECT p.match_id AS id, p.puuid, p.win, p.lineup_size AS lineupSize,
 		p.champion, p.role, p.kills, p.deaths, p.assists FROM participants AS p
-		WHERE EXISTS (SELECT 1 FROM matches AS m WHERE m.match_id = p.match_id AND m.queue_id = 440)
+		WHERE EXISTS (SELECT 1 FROM matches AS m WHERE m.match_id = p.match_id
+			AND m.queue_id = 440 AND m.match_kind = 'team')
 			AND (
 				EXISTS (SELECT 1 FROM participants AS candidate WHERE candidate.match_id = p.match_id AND candidate.lineup_size = 5)
 				OR (SELECT COUNT(*) FROM participants AS candidate WHERE candidate.match_id = p.match_id) >= 5

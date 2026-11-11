@@ -117,14 +117,17 @@ export async function executeSyncCommand(command: SyncCommand) {
 			}
 			if (command.command === 'history') {
 				log.info(`Budget : ${command.maxDurationSeconds === undefined ? 'un seul lot' : `${command.maxDurationSeconds} s (une requête en cours peut dépasser ce budget)`}`);
+				if (command.since !== undefined) {
+					log.info(`Rattrapage depuis le ${command.since} à 00:00 UTC, sans modifier les curseurs existants.`);
+				}
 				let batches = 0;
 				const result = await runHistory(database, client, command.maxDurationSeconds, (batch) => {
 					for (const failure of batch.failures) log.error(failure);
 					log.info(`Lot ${++batches} · ${formatIngestSummary(batch, true)}`);
-				}, progress);
+				}, progress, command.since);
 				log.step(2, 'Bilan');
 				log.info(`Historique : ${result.batches} lot(s), arrêt : ${result.stopReason}.`);
-				for (const line of formatSyncStatus(result.status)) log.info(line);
+				for (const line of formatSyncStatus(result.status, command.since)) log.info(line);
 				if (result.failures || result.stopReason === 'no-progress') {
 					if (result.stopReason === 'no-progress') log.error('Historical ingestion made no progress; inspect status before retrying.');
 					if (result.failures) log.error('Historique arrêté après échec : corriger l’erreur / respecter la pause Riot avant de relancer.');

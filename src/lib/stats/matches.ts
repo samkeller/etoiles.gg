@@ -7,6 +7,7 @@ import {
 	MIN_PARTIAL_LINEUP_SIZE,
 	validatedLineup,
 	toOutcome,
+	parsedMatch,
 	type MatchOutcome,
 } from './shared';
 
@@ -80,7 +81,7 @@ function queryMatches(database: Database.Database, scope: MatchScope): MatchSumm
 			FROM participants AS p
 			INNER JOIN matches AS m ON m.match_id = p.match_id
 			LEFT JOIN players AS pl ON pl.puuid = p.puuid
-			WHERE m.queue_id = 440 AND (
+			WHERE m.queue_id = 440 AND m.match_kind = 'team' AND (
 				EXISTS (SELECT 1 FROM participants AS candidate WHERE candidate.match_id = m.match_id
 					AND candidate.lineup_size BETWEEN ? AND ?)
 				OR (SELECT COUNT(*) FROM participants AS candidate WHERE candidate.match_id = m.match_id) BETWEEN ? AND ?
@@ -92,7 +93,7 @@ function queryMatches(database: Database.Database, scope: MatchScope): MatchSumm
 	const grouped = new Map<string, MemberRow[]>();
 	for (const row of rows) grouped.set(row.id, [...(grouped.get(row.id) ?? []), row]);
 	const rawMatches = database.prepare(`SELECT m.match_id AS id, m.raw_json AS rawJson FROM matches AS m
-		WHERE m.queue_id = 440 AND (
+		WHERE m.queue_id = 440 AND m.match_kind = 'team' AND (
 			EXISTS (SELECT 1 FROM participants AS p WHERE p.match_id = m.match_id AND p.lineup_size BETWEEN ? AND ?)
 			OR (SELECT COUNT(*) FROM participants AS p WHERE p.match_id = m.match_id) BETWEEN ? AND ?
 		)`)
@@ -191,8 +192,9 @@ export interface MatchDetail {
 	startedAt: number;
 	durationS: number;
 	queueId: 420 | 440;
+	isCollision: boolean;
 	outcome: MatchOutcome;
-	lineupSize: number;
+	lineupSize: number | null;
 	patch: string;
 	externalUrl: string;
 	/** Équipe des Étoiles en premier. */
@@ -210,6 +212,7 @@ interface MatchRow {
 	durationS: number | null;
 	queueId: number;
 	rawJson: string | null;
+	matchKind: 'team' | 'collision';
 }
 
 interface DetailMemberRow {
@@ -228,7 +231,8 @@ export function getMatchDetail(database: Database.Database, matchId: string): Ma
 	if (!isMatchId(matchId)) return null;
 
 	const match = database
-		.prepare('SELECT game_start_ts AS startedAt, duration_s AS durationS, queue_id AS queueId, raw_json AS rawJson FROM matches WHERE match_id = ?')
+		.prepare(`SELECT game_start_ts AS startedAt, duration_s AS durationS, queue_id AS queueId, raw_json AS rawJson,
+			match_kind AS matchKind FROM matches WHERE match_id = ?`)
 		.get(matchId) as MatchRow | undefined;
 	if (!match?.rawJson || match.startedAt === null || match.durationS === null ||
 		(match.queueId !== 420 && match.queueId !== 440)) return null;
@@ -241,6 +245,33 @@ export function getMatchDetail(database: Database.Database, matchId: string): Ma
 			WHERE p.match_id = ?
 		`)
 		.all(matchId) as DetailMemberRow[];
+	if (match.matchKind === 'collision') {
+		const raw = parsedMatch(match.rawJson);
+		if (raw.metadata.matchId !== matchId || raw.info.gameCreation !== match.startedAt ||
+			raw.info.gameDuration !== match.durationS || raw.info.queueId !== match.queueId) {
+			throw new Error(`Inconsistent data found in match ${matchId}.`);
+		}
+		const trackedPlayers = database.prepare('SELECT puuid, game_name AS name FROM players')
+			.all() as { puuid: string; name: string | null }[];
+		const tracked = new Map(trackedPlayers.map((player) => [player.puuid, player.name]));
+		const membersInMatch = raw.info.participants.filter((participant) => tracked.has(participant.puuid));
+		if (membersInMatch.length === 0) return null;
+		const memberNames = new Map(membersInMatch.map((participant) => [participant.puuid, tracked.get(participant.puuid) ?? null]));
+		const [ours, theirs] = ([100, 200] as const).map((teamId) =>
+			toTeam(raw.info, teamId, teamId, memberNames, false));
+		return {
+			id: matchId,
+			startedAt: match.startedAt,
+			durationS: match.durationS,
+			queueId: match.queueId as 420 | 440,
+			isCollision: true,
+			outcome: toOutcome(membersInMatch[0].win),
+			lineupSize: null,
+			patch: raw.info.gameVersion.split('.').slice(0, 2).join('.'),
+			externalUrl: externalMatchUrl(matchId),
+			teams: [ours, theirs],
+		};
+	}
 	if (members.length === 0) return null;
 
 	const { info, teamId: ourTeamId } = validatedLineup(database, matchId, match.rawJson, match.startedAt, match.durationS, members);
@@ -255,6 +286,7 @@ export function getMatchDetail(database: Database.Database, matchId: string): Ma
 		startedAt: match.startedAt,
 		durationS: match.durationS,
 		queueId: match.queueId,
+		isCollision: false,
 		outcome: toOutcome(members[0].win),
 		lineupSize: members[0].lineupSize,
 		patch: info.gameVersion.split('.').slice(0, 2).join('.'),
@@ -268,6 +300,7 @@ function toTeam(
 	teamId: TeamId,
 	ourTeamId: TeamId,
 	memberNames: ReadonlyMap<string, string | null>,
+	isOurs = teamId === ourTeamId,
 ): MatchTeam {
 	const team = info.teams.find((candidate) => candidate.teamId === teamId);
 	const teamParticipants = info.participants.filter((participant) => participant.teamId === teamId);
@@ -278,7 +311,7 @@ function toTeam(
 
 	return {
 		side: teamId === 100 ? 'blue' : 'red',
-		isOurs: teamId === ourTeamId,
+		isOurs,
 		outcome: toOutcome(teamParticipants[0]?.win ?? false),
 		kills: participants.reduce((total, participant) => total + participant.kills, 0),
 		gold: participants.reduce((total, participant) => total + participant.gold, 0),

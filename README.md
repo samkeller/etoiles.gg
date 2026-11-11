@@ -139,7 +139,7 @@ et leurs LP, jamais un MMR ni un score de comparaison entre joueurs.
 | `npm run sync -- help` | Affiche les commandes et options de synchronisation |
 | `npm run sync -- setup "Pseudo#TAG"` | Résout et enregistre les joueurs explicites, sinon ceux de `PLAYERS` |
 | `npm run sync -- update` | Synchronise les nouveautés Flex, Solo/Duo et les rangs du jour |
-| `npm run sync -- history [--max-duration SECONDES]` | Reprend un lot historique, ou plusieurs dans un budget explicite en secondes |
+| `npm run sync -- history [--since YYYY-MM-DD] [--max-duration SECONDES]` | Reprend l'historique ou rescane une période, avec un budget optionnel en secondes |
 | `npm run sync -- status` | Affiche la file prête/différée, les curseurs et la prochaine action |
 | `npm run syncAssets` | Télécharge les icônes de profil et de champions (Data Dragon) et génère les noms FR des champions |
 | `npm run stats:benchmark` | Compare les lectures sans cache, à froid et à chaud sur des historiques synthétiques |
@@ -193,6 +193,22 @@ donc pas une limite stricte de temps mural. Aucun délai ni retry supplémentair
 ajouté par la CLI : elle s'arrête dès un échec (notamment 429), lorsque seuls des détails
 différés restent, ou si la progression cesse. Les pages et IDs persistés sont repris
 au prochain lancement; ne pas relancer en boucle pendant une pause Riot.
+
+Pour récupérer un trou récent alors que les curseurs historiques sont déjà terminés :
+
+```sh
+npm run sync -- history --since 2026-11-07 --max-duration 120
+```
+
+`--since` accepte une date réelle au format `YYYY-MM-DD`, de 1970 à aujourd'hui,
+et démarre à **00:00 UTC** inclus. Cette collecte rescane toutes les pages Flex et
+Solo/Duo de la période, sans modifier les curseurs historiques ou incrémentaux.
+Les matchs existants sont validés et dédupliqués, et les détails différés conservent
+leur délai de reprise. Dans une invocation avec budget, la collecte n'est pas répétée
+entre les lots de détails. Après une interruption ou un nouveau lancement, la fenêtre
+est rescannée depuis sa première page : les IDs déjà collectés restent en base.
+Le bilan du rattrapage est distinct de l'état de l'historique global.
+En production, exécuter cette commande dans le conteneur via `railway ssh`.
 
 Le bilan distingue les imports nouveaux Flex (`440`) et Solo/Duo (`420`), les nouveaux
 matchs Flex à cinq, les matchs déjà présents, les réparations et les échecs. Les réparations
