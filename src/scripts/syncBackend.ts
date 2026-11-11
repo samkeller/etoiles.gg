@@ -6,7 +6,7 @@ import { TIMELINE_VERSION } from '../lib/timeline';
 export const SYNC_HELP = `Usage:
   npm run sync -- setup ["Name#TAG" ...]
   npm run sync -- update
-  npm run sync -- history [--max-duration SECONDS]
+  npm run sync -- history [--since YYYY-MM-DD] [--max-duration SECONDS]
   npm run sync -- status
   npm run sync -- help
 
@@ -15,13 +15,24 @@ history: one resumable batch by default; --max-duration repeats batches within a
 positive scheduling budget in seconds (maximum 86400). An in-flight Riot request
 can finish after the budget; existing HTTP timeouts/retries remain unchanged.
 No waiting between batches: failures or deferred-only work stop the command.
+--since rescans both ranked queues from midnight UTC on that date, independently
+of existing cursors. Relaunching rescans the window; collected IDs remain persisted.
 Each batch also collects up to 10 compact timelines for five-player Flex matches.
 status/help do not require a Riot API key.`;
 
 export type SyncCommand =
 	| { command: 'help' | 'update' | 'status' }
 	| { command: 'setup'; riotIds: string[] }
-	| { command: 'history'; maxDurationSeconds?: number };
+	| { command: 'history'; maxDurationSeconds?: number; since?: string };
+
+export function historyStartTime(since: string): number {
+	const milliseconds = Date.parse(`${since}T00:00:00.000Z`);
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(since) || !Number.isFinite(milliseconds) ||
+		milliseconds < 0 || milliseconds > Date.now() || new Date(milliseconds).toISOString().slice(0, 10) !== since) {
+		throw new Error('history --since expects a valid YYYY-MM-DD date, from 1970 through today (UTC).');
+	}
+	return milliseconds / 1000;
+}
 
 export function resolveRiotIds(args: string[], playersEnv?: string): string[] {
 	const values = args.length ? args : playersEnv?.split(',') ?? [];
@@ -47,13 +58,24 @@ export function parseSyncArgs(args: string[], playersEnv?: string): SyncCommand 
 		return { command };
 	}
 	if (command === 'history') {
-		if (!rest.length) return { command };
-		const seconds = Number(rest[1]);
-		if (rest.length !== 2 || rest[0] !== '--max-duration' ||
-			!/^\d+(?:\.\d+)?$/.test(rest[1] ?? '') || !Number.isFinite(seconds) || seconds <= 0 || seconds > 86400) {
-			throw new Error('history expects --max-duration SECONDS (positive number, maximum 86400).');
+		const result: Extract<SyncCommand, { command: 'history' }> = { command };
+		for (let index = 0; index < rest.length; index += 2) {
+			const option = rest[index];
+			const value = rest[index + 1];
+			if (option === '--since' && result.since === undefined && value !== undefined) {
+				historyStartTime(value);
+				result.since = value;
+			} else if (option === '--max-duration' && result.maxDurationSeconds === undefined && value !== undefined) {
+				const seconds = Number(value);
+				if (!/^\d+(?:\.\d+)?$/.test(value) || !Number.isFinite(seconds) || seconds <= 0 || seconds > 86400) {
+					throw new Error('history expects --max-duration SECONDS (positive number, maximum 86400).');
+				}
+				result.maxDurationSeconds = seconds;
+			} else {
+				throw new Error('history expects [--since YYYY-MM-DD] [--max-duration SECONDS], without duplicate options.');
+			}
 		}
-		return { command, maxDurationSeconds: seconds };
+		return result;
 	}
 	throw new Error(`Unknown sync command: ${command}. Use npm run sync -- help.`);
 }
@@ -122,7 +144,7 @@ export function readSyncStatus(database: Database.Database, queues: readonly num
 	};
 }
 
-export function formatSyncStatus(status: ReturnType<typeof readSyncStatus>): string[] {
+export function formatSyncStatus(status: ReturnType<typeof readSyncStatus>, since?: string): string[] {
 	const lines = [`File d’attente : ${status.pendingRemaining} matchs · ${status.pendingReady} prêts · ${status.pendingDeferred} différés.`];
 	if (status.nextRetryAt !== null) lines.push(`Prochaine reprise différée : ${new Date(status.nextRetryAt).toISOString()}`);
 	lines.push(`Timelines à cinq : ${status.timelines.collected} disponibles · ${status.timelines.unavailable} absentes chez Riot · ${status.timelines.pending} en attente (${status.timelines.ready} prêtes).`);
@@ -132,7 +154,11 @@ export function formatSyncStatus(status: ReturnType<typeof readSyncStatus>): str
 			row.nextStart === null ? 'à démarrer' : `reprendra à l’offset ${row.nextStart}`;
 		lines.push(`${row.name ?? row.puuid} · ${row.queueId === 420 ? 'Solo/Duo' : 'Flex'} : ${state}.`);
 	}
-	if (!status.cursors.length) lines.push('Aucun joueur enregistré. Prochaine action : npm run sync -- setup "Name#TAG".');
+	if (since !== undefined) {
+		lines.push(`Rattrapage depuis le ${since} à 00:00 UTC : collecte ${status.collectionComplete ? 'terminée' : 'incomplète'}.`);
+		if (status.historyComplete) lines.push('Rattrapage terminé. Les curseurs existants sont inchangés.');
+		else lines.push(`Rattrapage incomplet. ${status.pendingDeferred && !status.pendingReady ? 'Respecter la reprise différée, puis ' : ''}relancer npm run sync -- history --since ${since} --max-duration 120.`);
+	} else if (!status.cursors.length) lines.push('Aucun joueur enregistré. Prochaine action : npm run sync -- setup "Name#TAG".');
 	else if (status.historyComplete) lines.push('Historique terminé. Prochaine action : npm run sync -- update.');
 	else if (status.collectionComplete && !status.pendingReady && !status.timelines.ready) {
 		lines.push('Historique incomplet : détails ou timelines différés. Attendre la reprise indiquée, puis npm run sync -- history.');
@@ -156,23 +182,40 @@ export async function runHistory(
 	maxDurationSeconds?: number,
 	onBatch: (result: IngestResult) => void = () => {},
 	onProgress: (message: string) => void = () => {},
+	since?: string,
 ) {
 	if (maxDurationSeconds !== undefined && (!Number.isFinite(maxDurationSeconds) || maxDurationSeconds <= 0 || maxDurationSeconds > 86400)) {
 		throw new Error('Invalid history duration (seconds, maximum 86400).');
 	}
 	const deadlineAt = maxDurationSeconds === undefined ? undefined : Date.now() + maxDurationSeconds * 1000;
+	const sinceStartTime = since === undefined ? undefined : historyStartTime(since);
 	const queues = client.getRankedMatchIds ? [420, 440] : [440];
+	let windowCollected = false;
+	const status = () => {
+		const current = readSyncStatus(database, queues);
+		if (sinceStartTime === undefined) return current;
+		return {
+			...current,
+			cursors: [],
+			collectionComplete: windowCollected,
+			historyComplete: windowCollected && current.pendingRemaining === 0 && current.timelines.pending === 0,
+		};
+	};
 	let batches = 0;
 	let failures = 0;
 	let stopReason: 'single-batch' | 'complete' | 'budget' | 'failed' | 'deferred' | 'no-progress' = 'single-batch';
 	for (;;) {
-		const before = readSyncStatus(database, queues);
+		const before = status();
 		onProgress(`Lot historique ${batches + 1} : début${deadlineAt === undefined ? '' : ` · budget restant ${Math.max(0, (deadlineAt - Date.now()) / 1000).toFixed(1)} s`}`);
-		const result = await ingest(database, client, true, { deadlineAt, onProgress });
+		const result = await ingest(database, client, true, {
+			deadlineAt, onProgress, sinceStartTime,
+			skipCollection: sinceStartTime !== undefined && windowCollected,
+		});
+		if (sinceStartTime !== undefined) windowCollected = result.collectionComplete;
 		batches += 1;
 		failures += result.failures.length;
 		onBatch(result);
-		const after = readSyncStatus(database, queues);
+		const after = status();
 		if (result.failures.length) { stopReason = 'failed'; break; }
 		if (after.historyComplete) { stopReason = 'complete'; break; }
 		if (result.budgetExhausted || (deadlineAt !== undefined && Date.now() >= deadlineAt)) { stopReason = 'budget'; break; }
@@ -180,5 +223,5 @@ export async function runHistory(
 		if (after.collectionComplete && !after.pendingReady && !after.timelines.ready) { stopReason = 'deferred'; break; }
 		if (JSON.stringify(before) === JSON.stringify(after)) { stopReason = 'no-progress'; break; }
 	}
-	return { batches, failures, stopReason, status: readSyncStatus(database, queues) };
+	return { batches, failures, stopReason, status: status() };
 }

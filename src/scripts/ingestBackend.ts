@@ -40,7 +40,13 @@ function deferMatch(database: Database.Database, id: string, error: unknown): vo
 export async function ingest(database: Database.Database, client: RiotClient, backfill = false, options: {
 	deadlineAt?: number;
 	onProgress?: (message: string) => void;
+	sinceStartTime?: number;
+	skipCollection?: boolean;
 } = {}) {
+	if (options.sinceStartTime !== undefined &&
+		(!Number.isSafeInteger(options.sinceStartTime) || options.sinceStartTime < 0)) {
+		throw new Error('Invalid history start time.');
+	}
 	const startedAt = Date.now();
 	const progress = options.onProgress ?? (() => {});
 	const capturedOn = new Date(startedAt).toISOString().slice(0, 10);
@@ -52,6 +58,7 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 	let budgetExhausted = false;
 	let timelinesCollected = 0;
 	let timelinesUnavailable = 0;
+	let collectionComplete = true;
 	const withinBudget = () => {
 		if (options.deadlineAt !== undefined && Date.now() >= options.deadlineAt) {
 			budgetExhausted = true;
@@ -65,7 +72,10 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 	const supportsSoloDuo = Boolean(client.getRankedMatchIds);
 
 	try {
-		if (!roster.size) throw new Error('No players in DB; run npm run sync -- setup first');
+		if (!roster.size) {
+			collectionComplete = false;
+			throw new Error('No players in DB; run npm run sync -- setup first');
+		}
 		progress(`Collecte : ${players.length} joueurs · files ${supportsSoloDuo ? '440 (Flex), 420 (Solo/Duo)' : '440 (Flex)'} · mode ${backfill ? 'historique' : 'incrémental'}`);
 		const enqueue = database.prepare('INSERT OR IGNORE INTO ingest_pending (match_id) VALUES (?)');
 		database.prepare(`INSERT OR IGNORE INTO ingest_pending (match_id)
@@ -77,13 +87,14 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 						(SELECT COUNT(*) FROM participants AS candidate WHERE candidate.match_id = m.match_id))))`).run();
 
 		collection: for (const { puuid, name } of players) {
+			if (options.skipCollection) break;
 			for (const queue of RANKED_QUEUES) {
-				if (!withinBudget()) break collection;
+				if (!withinBudget()) { collectionComplete = false; break collection; }
 				if (queue === 420 && !supportsSoloDuo) continue;
 				try {
 					const context = `Collecte ${name ?? puuid} · queue=${queue}`;
 					const listIds = queue === 420 ? client.getRankedMatchIds! : client.getFlexMatchIds;
-					if (backfill) {
+					if (backfill && options.sinceStartTime === undefined) {
 						const cursor = database.prepare(`SELECT next_start AS nextStart, is_complete AS isComplete
 							FROM ingest_backfill_cursors WHERE puuid = ? AND queue_id = ?`)
 							.get(puuid, queue) as BackfillCursor | undefined;
@@ -122,7 +133,9 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 						}
 					} else {
 						let startTime: number | undefined;
-						if (queue === 440) {
+						if (options.sinceStartTime !== undefined) {
+							startTime = options.sinceStartTime;
+						} else if (queue === 440) {
 							const cursor = database.prepare('SELECT start_time AS startTime FROM ingest_cursors WHERE puuid = ?')
 								.get(puuid) as { startTime: number } | undefined;
 							startTime = cursor?.startTime ?? Math.max(0, Math.floor(startedAt / 1000) - 24 * 60 * 60);
@@ -134,7 +147,7 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 
 						const seen = new Set<string>();
 						for (let start = 0; ; start += MATCH_PAGE_SIZE) {
-							if (!withinBudget()) break collection;
+							if (!withinBudget()) { collectionComplete = false; break collection; }
 							progress(`${context} : start=${start} · count=${MATCH_PAGE_SIZE} · startTime=${startTime}`);
 							const ids = await listIds(puuid, { start, count: MATCH_PAGE_SIZE, startTime, queue });
 							if (ids.length && ids.every((id) => seen.has(id))) {
@@ -150,6 +163,7 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 							if (ids.length < MATCH_PAGE_SIZE) break;
 						}
 
+						if (options.sinceStartTime !== undefined) continue;
 						const overlapCursor = Math.max(0, Math.floor(startedAt / 1000) - 24 * 60 * 60);
 						if (queue === 440) {
 							database.prepare(`INSERT INTO ingest_cursors (puuid, start_time) VALUES (?, ?)
@@ -161,6 +175,7 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 						}
 					}
 				} catch (error) {
+					collectionComplete = false;
 					const queueName = queue === 420 ? 'Solo/Duo collection' : 'Flex collection';
 					const message = `${queueName} ${puuid}: ${messageOf(error)}`;
 					failures.push(message);
@@ -313,5 +328,5 @@ export async function ingest(database: Database.Database, client: RiotClient, ba
 		.run(startedAt, Date.now(), newMatches, failures.length ? 'failed' : 'ok');
 	progress(`Lot enregistré : ${failures.length ? 'échec' : 'ok'} · budget épuisé=${budgetExhausted} · ${pendingRemaining} matchs en attente · durée=${((Date.now() - startedAt) / 1000).toFixed(1)} s`);
 	return { newMatches, failures, pendingRemaining, importedByQueue, existingMatches, repairedMatches, budgetExhausted,
-		timelinesCollected, timelinesUnavailable };
+		timelinesCollected, timelinesUnavailable, collectionComplete };
 }
