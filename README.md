@@ -20,7 +20,7 @@ SQLite et propose plusieurs parcours reliés :
 | `/` | Accueil éditorial, dernière soirée, forme collective, cinq profils et accès aux parcours |
 | `/history` | Records, moments et repères collectifs par année, chronologie des soirées et archives partielles séparées |
 | `/players/{puuid}` | Statistiques à cinq, champions, multikills, présences par match; courbe de rang personnelle secondaire |
-| `/draft` | Table de draft à cinq sièges fixes : picks en un clic, historique et synergies observées à cinq, compositions jouées, bans habituels; état partageable via `?picks=` |
+| `/draft` | Table de draft à cinq sièges fixes : picks en un clic, historique et écarts de winrate à cinq, compositions jouées, bans habituels et winrates contre les champions adverses; état partageable via `?picks=` |
 | `/matches/{id}` | Résultat, patch, composition, moments, objectifs et courbe d'or si la timeline est disponible |
 
 **Périmètres inviolables :** les statistiques collectives et les compositions observées
@@ -64,6 +64,30 @@ ces champions, puis détaille les paires déjà réunies. Les « pistes perso »
 Solo/Duo ou du Flex individuel et sont présentées comme exploratoires. L'URL
 `/draft?picks=A,B,,D,` suit l'ordre Top, Jungle, Mid, ADC, Support. Les échantillons de
 moins de cinq restent des volumes descriptifs, jamais une recommandation.
+
+Sur les icônes des picks à cinq, les flèches comparent le winrate du joueur sur ce
+champion avec tous les autres picks sélectionnés à son winrate habituel sur ce même
+champion à cinq. Le pick de son propre siège est remplacé pour cette comparaison.
+Une flèche apparaît à partir de cinq parties communes et d'un écart d'au moins
+**+5 ou −5 points de pourcentage**. L'infobulle détaille les deux bilans et l'écart ;
+une association observée ne prouve pas une causalité. Sans autre pick, sans assez de
+parties ou avec un écart inférieur, aucune flèche n'est affichée.
+
+Les bans habituels restent classés par fréquence de ban, mais affichent notre winrate
+**contre** ces champions, et non dans les parties où ils ont été bannis. Le second
+bloc classe les adversaires par notre winrate croissant ; à taux égal, l'échantillon
+le plus grand passe en premier. Les deux blocs affichent jusqu'à douze champions et
+le nombre de rencontres. Le winrate est visible dès une rencontre : `ObservedWinRate`
+associe un point (taux observé) à un trait (intervalle de Wilson à 95 %).
+Un trait large signale une forte incertitude, sans seuil binaire de représentativité.
+Un champion jamais affronté affiche « Jamais affronté », pas un taux de 0 %.
+Chaque champion adverse compte une fois par partie Flex à cinq. Ces observations ne
+prouvent pas l'effet d'un ban ; l'intervalle ne modélise ni les patches ni les compositions.
+Cette présentation ne modifie pas les seuils des synergies et des autres écrans.
+La grille des bans affiche aussi le nombre de bans, distinct de l'échantillon des rencontres.
+Depuis une fiche de match, le lien de retour utilise l'historique pour retrouver la
+page source et ses sélections ; sans historique utilisable, il rejoint la source
+interne connue ou, à défaut, la Mémoire.
 
 Les soirées sont regroupées par une pause de quatre heures et datées selon le fuseau
 Europe/Paris. Le filtre de période utilise l'année civile; il ne prétend pas reconstituer

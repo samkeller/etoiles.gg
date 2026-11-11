@@ -15,11 +15,11 @@ import { getIndividualProfiles } from './individual';
 import { getOverview } from './overview';
 import { getCollective } from './collective';
 import { getTeamBans } from './bans';
-import { getDraftHistory, getSessionHistory } from './read-model';
+import { getDraftHistory, getDraftOpponents, getSessionHistory } from './read-model';
 
 afterEach(closeTestDatabases);
 
-const readers = [getMatches, getPlayers, getIndividualProfiles, getOverview, getCollective, getTeamBans, getDraftHistory, getSessionHistory] as const;
+const readers = [getMatches, getPlayers, getIndividualProfiles, getOverview, getCollective, getTeamBans, getDraftHistory, getDraftOpponents, getSessionHistory] as const;
 
 describe('versioned statistics cache', () => {
 	it('preserves every summary and scope, avoids source queries on hits and isolates mutable results', () => {

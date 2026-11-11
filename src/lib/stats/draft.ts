@@ -32,6 +32,13 @@ export interface DraftPair {
 	record: DraftRecord;
 }
 
+export interface DraftSynergy {
+	baseline: DraftRecord;
+	together: DraftRecord;
+	delta: number | null;
+	direction: 'up' | 'down' | null;
+}
+
 export interface DraftComposition {
 	/** Un champion par siège, dans l'ordre des sièges fournis. */
 	champions: string[];
@@ -69,6 +76,31 @@ function toRecord(matches: DraftMatch[]): DraftRecord {
 export function matchesWithPicks(matches: readonly DraftMatch[], picks: readonly DraftPick[]): DraftRecord {
 	if (picks.length === 0) return { games: 0, wins: 0, matches: [] };
 	return toRecord(matches.filter((match) => picks.every((pick) => includesPick(match, pick))));
+}
+
+/** Compare un pick à son bilan habituel, avec tous les picks des autres sièges réunis. */
+export function pickSynergy(
+	matches: readonly DraftMatch[],
+	selection: readonly DraftPick[],
+	candidate: DraftPick,
+	minimumGames: number,
+): DraftSynergy | null {
+	const others = selection.filter((pick) => pick.puuid !== candidate.puuid);
+	if (others.length === 0) return null;
+	const baseline = matchesWithPicks(matches, [candidate]);
+	const together = matchesWithPicks(matches, [...others, candidate]);
+	if (together.games < minimumGames || baseline.games === 0 || together.games === 0) {
+		return { baseline, together, delta: null, direction: null };
+	}
+	// Produits entiers : une différence exactement égale à cinq points reste incluse.
+	const difference = 100 * (together.wins * baseline.games - baseline.wins * together.games);
+	const denominator = together.games * baseline.games;
+	return {
+		baseline,
+		together,
+		delta: difference / denominator,
+		direction: difference >= 5 * denominator ? 'up' : difference <= -5 * denominator ? 'down' : null,
+	};
 }
 
 /** Chaque paire de picks sélectionnés, avec les parties où elle a été jouée ensemble. */

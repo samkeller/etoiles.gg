@@ -4,6 +4,7 @@ import {
 	explorationPicks,
 	matchesWithPicks,
 	pairRecords,
+	pickSynergy,
 	type DraftMatch,
 } from './draft';
 
@@ -53,6 +54,76 @@ describe('pairRecords', () => {
 			['Vi', 'Lux', 1],
 			['Garen', 'Lux', 0],
 		]);
+	});
+});
+
+describe('pickSynergy', () => {
+	const history = Array.from({ length: 20 }, (_, index) =>
+		match(`EUW1_${index}`, index, index < 12 ? 'win' : 'loss', [
+			'Jax', 'Vi', index < 8 || index >= 12 ? 'Ahri' : 'Lux', 'Jinx', 'Lulu',
+		]));
+	const candidate = { puuid: 'p0', champion: 'Jax' };
+
+	it('compares the same player and champion with their overall five-player winrate', () => {
+		const synergy = pickSynergy(history, [{ puuid: 'p2', champion: 'Lux' }], candidate, 5);
+		expect(synergy).toMatchObject({
+			baseline: { games: 20, wins: 12 },
+			together: { games: 4, wins: 4 },
+			delta: null, direction: null,
+		});
+		expect(pickSynergy(history, [{ puuid: 'p2', champion: 'Ahri' }], candidate, 5))
+			.toMatchObject({ together: { games: 16, wins: 8 }, delta: -10, direction: 'down' });
+	});
+
+	it('does not signal a synergy without a pick on another seat', () => {
+		expect(pickSynergy(history, [], candidate, 5)).toBeNull();
+		expect(pickSynergy(history, [candidate], candidate, 5)).toBeNull();
+	});
+
+	it('replaces the selected pick on the candidate seat and requires all other picks together', () => {
+		const selection = [
+			{ puuid: 'p0', champion: 'Garen' },
+			{ puuid: 'p2', champion: 'Ahri' },
+			{ puuid: 'p4', champion: 'Nami' },
+		];
+		expect(pickSynergy(history, selection, candidate, 5))
+			.toMatchObject({ baseline: { games: 20 }, together: { games: 0 }, delta: null, direction: null });
+		expect(pickSynergy(history, selection.slice(0, 2), candidate, 5))
+			.toMatchObject({ together: { games: 16, wins: 8 }, direction: 'down' });
+	});
+
+	it.each([
+		[13, 'up', 5],
+		[11, 'down', -5],
+		[12, null, 0],
+	] as const)('includes exact five-point boundaries: %i wins in the association', (wins, direction, delta) => {
+		const boundary = Array.from({ length: 40 }, (_, index) =>
+			match(`boundary-${index}`, index, (index < 20 ? index < wins : index < 20 + 24 - wins) ? 'win' : 'loss',
+				['Jax', 'Vi', index < 20 ? 'Ahri' : 'Lux']));
+		expect(pickSynergy(boundary, [{ puuid: 'p2', champion: 'Ahri' }], candidate, 5))
+			.toMatchObject({ delta, direction });
+	});
+
+	it.each([56, 64])('does not signal a four-point gap: %i wins in the association', (wins) => {
+		const close = Array.from({ length: 200 }, (_, index) =>
+			match(`close-${index}`, index, (index < 100 ? index < wins : index < 100 + 120 - wins) ? 'win' : 'loss',
+				['Jax', 'Vi', index < 100 ? 'Ahri' : 'Lux']));
+		expect(pickSynergy(close, [{ puuid: 'p2', champion: 'Ahri' }], candidate, 5))
+			.toMatchObject({ delta: wins - 60, direction: null });
+	});
+
+	it('keeps small and unseen samples descriptive, including champions played by someone else', () => {
+		expect(pickSynergy(matches, [{ puuid: 'p2', champion: 'Ahri' }], candidate, 5))
+			.toMatchObject({ together: { games: 2, wins: 2 }, delta: null, direction: null });
+		expect(pickSynergy(history, [{ puuid: 'p2', champion: 'Ahri' }], { puuid: 'p1', champion: 'Jax' }, 5))
+			.toMatchObject({ baseline: { games: 0 }, together: { games: 0 }, delta: null, direction: null });
+	});
+
+	it('shows a signal at exactly five shared games', () => {
+		const five = Array.from({ length: 10 }, (_, index) =>
+			match(`five-${index}`, index, index < 5 ? 'win' : 'loss', ['Jax', index < 5 ? 'Vi' : 'LeeSin']));
+		expect(pickSynergy(five, [{ puuid: 'p1', champion: 'Vi' }], candidate, 5))
+			.toMatchObject({ together: { games: 5, wins: 5 }, delta: 50, direction: 'up' });
 	});
 });
 

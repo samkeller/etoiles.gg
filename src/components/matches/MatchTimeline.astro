@@ -8,6 +8,7 @@ import ChampionIcon from '../ui/ChampionIcon.astro';
 import OpggIcon from '../ui/OpggIcon.astro';
 import type { OpggIconName } from '../../lib/opgg-icons';
 import TimelineTooltipRow from './TimelineTooltipRow.astro';
+import './matchTimeline';
 
 interface Props { timeline: TimelineState; }
 const { timeline } = Astro.props;
@@ -119,6 +120,3 @@ const last = summary?.gold.at(-1);
 		</match-timeline>
 	) : <p class="mt-2 text-sm text-muted">{timeline.status === 'unavailable' ? 'Riot ne fournit pas de timeline pour cette partie.' : 'Timeline en attente de synchronisation.'}</p>}
 </section>
-<script>
-	import '../../scripts/matchTimeline';
-</script>

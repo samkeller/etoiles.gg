@@ -72,6 +72,9 @@
 			const template = target.querySelector<HTMLTemplateElement>('template[data-tip-content]');
 			body.textContent = template ? target.dataset.tipSummary ?? '' : text;
 			richBody.replaceChildren(...(template ? [template.content.cloneNode(true)] : []));
+			const compact = target.hasAttribute('data-tip-compact');
+			layer.style.width = compact ? 'max-content' : '';
+			layer.style.maxWidth = compact ? 'min(14rem, calc(100vw - 16px))' : '';
 			layer.toggleAttribute('data-rich', Boolean(template));
 			layer.toggleAttribute('data-scrollable', target.hasAttribute('data-tip-scroll'));
 			layer.scrollTop = 0;
@@ -93,6 +96,9 @@
 
 		document.addEventListener('pointerover', sync);
 		document.addEventListener('focusin', sync);
+		document.addEventListener('tooltiprefresh', (event) => {
+			if (event.target === current && current) show(current);
+		});
 		document.addEventListener('focusout', (event) => {
 			if (event.relatedTarget instanceof Node && layer.contains(event.relatedTarget)) return;
 			hide();

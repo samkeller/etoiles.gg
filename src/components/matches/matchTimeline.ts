@@ -1,5 +1,5 @@
-import { CHART, plotWidth, nearestGoldFrame, groupTimelineEvents, markerTone, markerTooltipTitle, type TimelineMarker } from '../lib/timelineChart';
-import { formatCompact, formatDuration } from '../lib/format';
+import { CHART, plotWidth, nearestGoldFrame, groupTimelineEvents, markerTone, markerTooltipTitle, type TimelineMarker } from '../../lib/timelineChart';
+import { formatCompact, formatDuration } from '../../lib/format';
 
 class MatchTimeline extends HTMLElement {
 	private controller?: AbortController;

@@ -1,26 +1,22 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import DraftSeat from '../components/draft/DraftSeat.astro';
-import ChampionIcon from '../components/ui/ChampionIcon.astro';
-import OpggIcon from '../components/ui/OpggIcon.astro';
-import Panel from '../components/ui/Panel.astro';
-import SectionHeading from '../components/ui/SectionHeading.astro';
+import DraftApp from '../components/draft/DraftApp';
+import { sidebarRecords } from '../components/draft/sidebarRecords';
 import { db } from '../lib/db/db';
-import { formatPercent, formatSince, pluralize } from '../lib/format';
 import { SITE_NAME } from '../lib/site';
-import { championName, compareRoles } from '../lib/lol';
+import { compareRoles } from '../lib/lol';
 import championNames from '../lib/lol/champion-names.json';
 import {
 	explorationPicks,
-	getIndividualProfiles,
 	getDraftHistory,
+	getDraftOpponents,
+	getIndividualProfiles,
 	getPlayers,
 	getTeamBans,
 	MIN_DRAFT_GAMES,
 } from '../lib/stats';
 
 const EXPLORATION_LIMIT = 6;
-const BAN_LIMIT = 12;
 
 const individual = new Map(getIndividualProfiles(db).map((profile) => [profile.puuid, profile]));
 const seats = getPlayers(db)
@@ -32,418 +28,56 @@ const seats = getPlayers(db)
 			name: player.name,
 			role: player.mainRole,
 			pool: player.champions,
-			explore: personal ? explorationPicks(player.champions, [personal.soloDuo.champions, personal.flex.champions], EXPLORATION_LIMIT) : [],
+			explore: personal
+				? explorationPicks(player.champions, [personal.soloDuo.champions, personal.flex.champions], EXPLORATION_LIMIT)
+				: [],
 		};
 	});
 
 const { matches, compositions } = getDraftHistory(db);
 const bans = getTeamBans(db);
+const opponents = getDraftOpponents(db);
 const catalog = Object.entries(championNames)
 	.map(([id, name]) => ({ id, name }))
 	.sort((left, right) => left.name.localeCompare(right.name, 'fr'));
-
-const draftData = JSON.stringify({
-	seats: seats.map(({ puuid, name, pool, explore }) => ({
-		puuid,
-		name,
-		pool: pool.map(({ champion, games, wins }) => ({ champion, games, wins })),
-		explore: explore.map(({ champion, games, wins }) => ({ champion, games, wins })),
-	})),
+const renderedAt = Date.now();
+const normalize = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+const championLookup = new Map(catalog.flatMap(({ id, name }) => [[normalize(name), id], [normalize(id), id]]));
+const queryPicks = Astro.url.searchParams.get('picks')?.split(',') ?? [];
+const initialPicks = seats.map((_, index) => {
+	const value = queryPicks[index];
+	return value ? championLookup.get(normalize(value)) ?? null : null;
+});
+const { banRecords, opponentRecords } = sidebarRecords(bans.records, opponents);
+const draftSeats = seats.map(({ puuid, name, role, pool, explore }) => ({
+	puuid,
+	name,
+	role,
+	pool: pool.map(({ champion, games, wins }) => ({ champion, games, wins })),
+	explore: explore.map(({ champion, games, wins }) => ({ champion, games, wins })),
+}));
+const draftCompositions = compositions.map(({ champions, games, wins, lastPlayedAt, matchIds }) => ({
+	champions,
+	games,
+	wins,
+	lastPlayedAt,
+	latestMatchId: matchIds[0],
+}));
+const draftAppData = {
+	seats: draftSeats,
 	matches,
+	compositions: draftCompositions,
 	champions: catalog,
 	minimumGames: MIN_DRAFT_GAMES,
-}).replaceAll('<', '\\u003c').replaceAll('>', '\\u003e').replaceAll('&', '\\u0026');
-
-const toolButton = 'focus-ring inline-flex min-h-9 items-center gap-2 border border-white/12 px-3 text-xs text-muted transition-colors hover:border-gold-200/50 hover:text-ink';
+	initialPicks,
+	banRecords,
+	opponentRecords,
+	renderedAt,
+};
 ---
 
-<BaseLayout title={`Draft — ${SITE_NAME}`} description="Préparer une draft à partir des champions réellement joués à cinq par les Étoiles.">
+<BaseLayout title={`Draft — ${SITE_NAME}`} description="Préparer une composition à partir des champions réellement joués à cinq par les Étoiles.">
 	<main class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-10 px-4 py-10 sm:px-8 sm:py-14">
-		<header class="flex flex-wrap items-end justify-between gap-4">
-			<div>
-				<p class="label-caps flex items-center gap-3 text-gold-200">
-					<span class="size-1.5 rotate-45 bg-gold-200" aria-hidden="true"></span>
-					Draft
-				</p>
-				<h1 class="mt-2 font-display text-4xl font-medium tracking-tight text-ink sm:text-5xl">Préparer une composition</h1>
-			</div>
-			<div class="flex gap-2">
-				<button id="draft-copy" type="button" disabled class:list={[toolButton, 'disabled:cursor-not-allowed disabled:opacity-40']}>
-					<OpggIcon name="ui-copy" class="size-3.5" /> <span data-copy-label>Copier le lien</span>
-				</button>
-				<button id="draft-reset" type="button" disabled class:list={[toolButton, 'disabled:cursor-not-allowed disabled:opacity-40']}>
-					<OpggIcon name="ui-reset" class="size-3.5" /> Tout effacer
-				</button>
-			</div>
-		</header>
-
-		{seats.length === 0 ? (
-			<Panel class="p-8 text-center text-sm text-muted">Aucune partie à cinq enregistrée : la table de draft s’ouvrira avec la première soirée.</Panel>
-		) : (
-			<section aria-label="Les cinq sièges" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-				{seats.map((seat, index) => (
-					<DraftSeat index={index} puuid={seat.puuid} name={seat.name} role={seat.role} pool={seat.pool} explore={seat.explore} minimumGames={MIN_DRAFT_GAMES} />
-				))}
-			</section>
-		)}
-
-		<div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
-			<div class="flex min-w-0 flex-col gap-6">
-				<Panel as="section" aria-labelledby="verdict-title" class="p-5 sm:p-7">
-					<h2 id="verdict-title" class="font-display text-xl font-medium tracking-tight text-ink">Dans nos parties à cinq</h2>
-					<p data-verdict-empty class="mt-4 text-sm text-muted">Un pick suffit pour voir son historique ; plusieurs révèlent leurs associations.</p>
-					<div data-verdict hidden aria-live="polite" class="mt-5 grid gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-						<div>
-							<p data-verdict-kind class="label-caps text-[0.65rem] text-muted"></p>
-							<p class="mt-2 flex items-baseline gap-3">
-								<span data-verdict-games class="font-display text-5xl text-ink tabular-nums"></span>
-								<span data-verdict-record class="text-sm tabular-nums text-muted"></span>
-							</p>
-							<p data-verdict-rate class="mt-1 text-sm text-gold-200"></p>
-							<ol data-verdict-matches aria-label="Parties correspondantes" class="mt-4 flex flex-wrap gap-1.5"></ol>
-						</div>
-						<div data-pairs-block hidden>
-							<p class="label-caps text-[0.65rem] text-muted" data-tip="Deux picks présents dans la même partie à cinq. Une rencontre observée, pas une cause de victoire.">Synergie observée</p>
-							<ul data-pairs class="mt-3 flex flex-col gap-2"></ul>
-							<p data-pairs-never class="mt-3 text-xs leading-relaxed text-hextech-300"></p>
-						</div>
-					</div>
-				</Panel>
-
-				<section aria-labelledby="compositions-title">
-					<SectionHeading id="compositions-title" eyebrow="Déjà jouées" title="Nos compositions" />
-					{compositions.length === 0 ? (
-						<p class="mt-4 text-sm text-muted">Aucune composition complète enregistrée pour l’instant.</p>
-					) : (
-						<>
-							<ul class="mt-5 flex flex-col gap-2">
-								{compositions.map((composition, position) => (
-									<li data-composition={composition.champions.join('|')} hidden={position >= 6}
-										class="flex items-center gap-3 border border-white/10 bg-night-900/50 pr-3 transition-colors hover:border-gold-300/40">
-										<button type="button" data-load-composition={composition.champions.join('|')}
-											class="focus-ring flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-2 p-2.5 text-left"
-											aria-label={`Charger ${composition.champions.map((champion) => championName(champion)).join(', ')}`}>
-											<span class="flex gap-1">
-												{composition.champions.map((champion, seat) => (
-													<ChampionIcon champion={champion} size="sm" tip={seats[seat]?.name ?? false} />
-												))}
-											</span>
-											<span class="text-xs tabular-nums text-muted">
-												<span class="text-gold-100">{composition.wins} V</span> – {composition.games - composition.wins} D
-												{composition.games >= MIN_DRAFT_GAMES && <span class="text-gold-200"> · {formatPercent(composition.wins / composition.games)}</span>}
-											</span>
-											<span class="text-xs text-muted">{formatSince(composition.lastPlayedAt)}</span>
-										</button>
-										<a href={`/matches/${composition.matchIds[0]}`} class="focus-ring shrink-0 text-xs text-hextech-300 hover:text-ink"
-											data-tip={pluralize(composition.games, 'partie')} data-tip-title="Voir la dernière"><OpggIcon name="ui-arrow-right" class="size-4" /></a>
-									</li>
-								))}
-							</ul>
-							<p data-compositions-empty hidden class="mt-4 text-sm text-muted">Jamais jouée en entier : à vous d’écrire la première.</p>
-							<p data-compositions-count class="mt-3 text-xs text-muted">{pluralize(compositions.length, 'composition')}</p>
-						</>
-					)}
-				</section>
-			</div>
-
-			<aside aria-labelledby="bans-title" class="xl:sticky xl:top-24">
-			<Panel class="p-5">
-				<h2 id="bans-title" class="font-display text-xl font-medium tracking-tight text-ink">Nos bans habituels</h2>
-				{bans.records.length === 0 ? (
-					<p class="mt-3 text-sm text-muted">Aucune phase de bans enregistrée.</p>
-				) : (
-					<>
-						<ul class="mt-4 grid grid-cols-4 gap-x-2 gap-y-3">
-							{bans.records.slice(0, BAN_LIMIT).map((record) => (
-								<li class="relative grid place-items-center">
-									<ChampionIcon champion={record.champion} size="md" class="grayscale-[35%]"
-										tip={`Banni ${pluralize(record.bans, 'fois', 'fois')} sur ${bans.matches} parties\nDernier : ${formatSince(record.lastBannedAt)}`} />
-									<span aria-hidden="true" class="pointer-events-none absolute -bottom-1 left-1/2 -translate-x-1/2 border border-white/15 bg-night-950 px-1 text-[0.6rem] leading-3.5 font-bold tabular-nums text-muted">{record.bans}</span>
-								</li>
-							))}
-						</ul>
-						<p class="mt-4 text-xs text-muted">Sur {pluralize(bans.matches, 'partie')} à cinq.</p>
-					</>
-				)}
-			</Panel>
-			</aside>
-		</div>
-
-		<datalist id="champion-catalog">
-			{catalog.map((champion) => <option value={champion.name} />)}
-		</datalist>
-		<script type="application/json" id="draft-data" set:html={draftData} />
+		<DraftApp client:load {...draftAppData} />
 	</main>
 </BaseLayout>
-
-<script>
-	import { matchesWithPicks, pairRecords, type DraftMatch, type DraftPick } from '../lib/stats/draft';
-	import { championIcon, championName } from '../lib/lol';
-	import { formatDate, formatPercent, pluralize } from '../lib/format';
-
-	interface SeatRecord { champion: string; games: number; wins: number }
-	interface SeatData { puuid: string; name: string; pool: SeatRecord[]; explore: SeatRecord[] }
-	interface DraftData {
-		seats: SeatData[];
-		matches: DraftMatch[];
-		champions: { id: string; name: string }[];
-		minimumGames: number;
-	}
-
-	const VISIBLE_COMPOSITIONS = 6;
-	const VISIBLE_MATCHES = 24;
-
-	const normalize = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/gi, '').toLowerCase();
-
-	function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = ''): HTMLElementTagNameMap[K] {
-		const node = document.createElement(tag);
-		if (className) node.className = className;
-		if (text) node.textContent = text;
-		return node;
-	}
-
-	function fillIcon(target: HTMLElement, champion: string) {
-		const initials = element('span', '', championName(champion).slice(0, 2));
-		initials.setAttribute('aria-hidden', 'true');
-		const image = element('img', 'absolute inset-0 size-full object-cover');
-		image.src = championIcon(champion);
-		image.alt = '';
-		image.addEventListener('error', () => image.remove(), { once: true });
-		target.replaceChildren(initials, image);
-	}
-
-	function icon(champion: string, size: string, tip?: string) {
-		const node = element('span', `relative inline-grid shrink-0 place-items-center overflow-hidden border border-gold-700 bg-night-800 font-display text-[0.55rem] font-bold text-muted ${size}`);
-		fillIcon(node, champion);
-		node.dataset.tipTitle = championName(champion);
-		if (tip) node.dataset.tip = tip;
-		return node;
-	}
-
-	function recordLine(games: number, wins: number, minimumGames: number) {
-		const rate = games >= minimumGames ? ` · ${formatPercent(wins / games)}` : '';
-		return `${wins} V – ${games - wins} D${rate}`;
-	}
-
-	function start(data: DraftData) {
-		const seats = data.seats;
-		const picks: (string | null)[] = seats.map(() => null);
-		const lookup = new Map<string, string>();
-		for (const champion of data.champions) {
-			lookup.set(normalize(champion.name), champion.id);
-			lookup.set(normalize(champion.id), champion.id);
-		}
-		const resolve = (value: string) => lookup.get(normalize(value)) ?? null;
-
-		const initial = new URL(window.location.href).searchParams.get('picks');
-		initial?.split(',').slice(0, seats.length).forEach((value, index) => {
-			picks[index] = value ? resolve(value) : null;
-		});
-
-		const verdictEmpty = document.querySelector<HTMLElement>('[data-verdict-empty]');
-		const verdict = document.querySelector<HTMLElement>('[data-verdict]');
-		const copyButton = document.querySelector<HTMLButtonElement>('#draft-copy');
-		const resetButton = document.querySelector<HTMLButtonElement>('#draft-reset');
-		const compositionRows = [...document.querySelectorAll<HTMLElement>('[data-composition]')];
-		const compositionsEmpty = document.querySelector<HTMLElement>('[data-compositions-empty]');
-		const compositionsCount = document.querySelector<HTMLElement>('[data-compositions-count]');
-
-		function selectedPicks(): DraftPick[] {
-			return picks.flatMap((champion, index) => champion ? [{ puuid: seats[index].puuid, champion }] : []);
-		}
-
-		function renderSeat(index: number) {
-			const champion = picks[index];
-			const seat = seats[index];
-			const article = document.querySelector<HTMLElement>(`[data-seat="${index}"]`);
-			const empty = document.querySelector<HTMLElement>(`[data-slot-empty="${index}"]`);
-			const filled = document.querySelector<HTMLElement>(`[data-slot-filled="${index}"]`);
-			const clear = document.querySelector<HTMLElement>(`[data-clear="${index}"]`);
-			if (!article || !empty || !filled || !clear) return;
-
-			article.toggleAttribute('data-filled', champion !== null);
-			empty.hidden = champion !== null;
-			filled.hidden = champion === null;
-			clear.hidden = champion === null;
-			for (const button of article.querySelectorAll<HTMLElement>('[data-pick-champion]')) {
-				button.setAttribute('aria-pressed', String(button.dataset.pickChampion === champion));
-			}
-			if (!champion || filled.dataset.champion === champion) return;
-
-			filled.dataset.champion = champion;
-			const iconSlot = filled.querySelector<HTMLElement>('[data-slot-icon]');
-			const name = filled.querySelector<HTMLElement>('[data-slot-name]');
-			const record = filled.querySelector<HTMLElement>('[data-slot-record]');
-			if (!iconSlot || !name || !record) return;
-
-			fillIcon(iconSlot, champion);
-			iconSlot.classList.remove('animate-pop');
-			void iconSlot.offsetWidth;
-			iconSlot.classList.add('animate-pop', 'motion-reduce:animate-none');
-			name.textContent = championName(champion);
-
-			const team = seat.pool.find((entry) => entry.champion === champion);
-			const personal = seat.explore.find((entry) => entry.champion === champion);
-			if (team) {
-				record.textContent = `${pluralize(team.games, 'partie')} à cinq · ${recordLine(team.games, team.wins, data.minimumGames)}`;
-				record.className = 'text-xs tabular-nums text-muted';
-			} else {
-				record.textContent = personal ? `Piste perso · ${pluralize(personal.games, 'partie')} en classé` : 'Jamais joué à cinq';
-				record.className = 'text-xs text-hextech-300';
-			}
-		}
-
-		function renderVerdict(selection: DraftPick[]) {
-			if (!verdict || !verdictEmpty) return;
-			verdictEmpty.hidden = selection.length > 0;
-			verdict.hidden = selection.length === 0;
-			if (selection.length === 0) return;
-
-			const record = matchesWithPicks(data.matches, selection);
-			const kind = verdict.querySelector<HTMLElement>('[data-verdict-kind]');
-			const games = verdict.querySelector<HTMLElement>('[data-verdict-games]');
-			const summary = verdict.querySelector<HTMLElement>('[data-verdict-record]');
-			const rate = verdict.querySelector<HTMLElement>('[data-verdict-rate]');
-			const list = verdict.querySelector<HTMLElement>('[data-verdict-matches]');
-			if (!kind || !games || !summary || !rate || !list) return;
-
-			kind.textContent = record.games === 0
-				? 'Suggestion exploratoire'
-				: selection.length === 1 ? 'Historique observé' : `Historique observé · ${selection.length} picks réunis`;
-			kind.className = `label-caps text-[0.65rem] ${record.games === 0 ? 'text-hextech-300' : 'text-muted'}`;
-			games.textContent = String(record.games);
-			summary.textContent = record.games === 0
-				? (selection.length === 1 ? 'partie à cinq' : 'partie à cinq avec ces picks réunis')
-				: `${record.games === 1 ? 'partie' : 'parties'} · ${record.wins} V – ${record.games - record.wins} D`;
-			rate.textContent = record.games >= data.minimumGames
-				? `${formatPercent(record.wins / record.games)} de victoires`
-				: record.games > 0 ? `Taux affiché à partir de ${data.minimumGames} parties` : 'Jamais réunis : tout reste à découvrir.';
-			rate.className = `mt-1 text-sm ${record.games >= data.minimumGames ? 'text-gold-200' : 'text-muted'}`;
-
-			list.replaceChildren(...record.matches.slice(0, VISIBLE_MATCHES).map((match, position) => {
-				const item = element('li');
-				const link = element('a', `focus-ring block size-3.5 rotate-45 border transition-transform hover:scale-125 motion-safe:animate-pop ${match.outcome === 'win' ? 'border-gold-100 bg-gold-200' : 'border-grey-700 bg-night-800'}`);
-				link.href = `/matches/${encodeURIComponent(match.id)}`;
-				link.style.animationDelay = `${Math.min(position, 12) * 30}ms`;
-				link.dataset.tipTitle = match.outcome === 'win' ? 'Victoire' : 'Défaite';
-				link.dataset.tip = formatDate(match.startedAt);
-				link.setAttribute('aria-label', `${match.outcome === 'win' ? 'Victoire' : 'Défaite'} du ${formatDate(match.startedAt)}`);
-				item.append(link);
-				return item;
-			}));
-
-			const pairsBlock = verdict.querySelector<HTMLElement>('[data-pairs-block]');
-			const pairsList = verdict.querySelector<HTMLElement>('[data-pairs]');
-			const never = verdict.querySelector<HTMLElement>('[data-pairs-never]');
-			if (!pairsBlock || !pairsList || !never) return;
-			const pairs = pairRecords(data.matches, selection);
-			pairsBlock.hidden = pairs.length === 0;
-			const seen = pairs.filter((pair) => pair.record.games > 0);
-			const unseen = pairs.filter((pair) => pair.record.games === 0);
-			pairsList.replaceChildren(...seen.map((pair) => {
-				const row = element('li', 'grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3');
-				const icons = element('span', 'flex -space-x-1.5');
-				icons.append(...pair.picks.map((pick) => icon(pick.champion, 'size-7')));
-				const bar = element('span', 'flex h-1.5 overflow-hidden bg-night-800');
-				const wins = element('span', 'origin-left bg-gold-200 motion-safe:animate-grow-x');
-				wins.style.width = `${(pair.record.wins / pair.record.games) * 100}%`;
-				bar.append(wins);
-				bar.dataset.tipTitle = pair.picks.map((pick) => championName(pick.champion)).join(' + ');
-				bar.dataset.tip = `${pluralize(pair.record.games, 'partie')} ensemble\n${recordLine(pair.record.games, pair.record.wins, data.minimumGames)}`;
-				const count = element('span', 'text-xs tabular-nums text-muted', `${pair.record.wins}/${pair.record.games}`);
-				count.setAttribute('aria-label', `${pair.record.wins} victoires sur ${pair.record.games} parties`);
-				row.append(icons, bar, count);
-				return row;
-			}));
-			never.textContent = unseen.length === 0 ? '' : `Jamais ensemble : ${unseen.map((pair) => pair.picks.map((pick) => championName(pick.champion)).join(' + ')).join(', ')}.`;
-		}
-
-		function renderCompositions() {
-			let visible = 0;
-			for (const row of compositionRows) {
-				const champions = (row.dataset.composition ?? '').split('|');
-				const matches = picks.every((champion, index) => champion === null || champions[index] === champion);
-				row.hidden = !matches || visible >= VISIBLE_COMPOSITIONS;
-				if (matches) visible += 1;
-			}
-			if (compositionsEmpty) compositionsEmpty.hidden = visible > 0;
-			if (compositionsCount) compositionsCount.textContent = pluralize(visible, 'composition');
-		}
-
-		function render() {
-			seats.forEach((_, index) => renderSeat(index));
-			const selection = selectedPicks();
-			renderVerdict(selection);
-			renderCompositions();
-			if (copyButton) copyButton.disabled = selection.length === 0;
-			if (resetButton) resetButton.disabled = selection.length === 0;
-
-			const url = new URL(window.location.href);
-			if (selection.length > 0) url.searchParams.set('picks', picks.map((champion) => champion ?? '').join(','));
-			else url.searchParams.delete('picks');
-			window.history.replaceState(null, '', url);
-		}
-
-		document.addEventListener('click', (event) => {
-			const target = event.target instanceof Element ? event.target : null;
-			const pick = target?.closest<HTMLElement>('[data-pick-champion]');
-			if (pick) {
-				const index = Number(pick.dataset.pickSeat);
-				const champion = pick.dataset.pickChampion ?? null;
-				picks[index] = picks[index] === champion ? null : champion;
-				return render();
-			}
-			const clear = target?.closest<HTMLElement>('[data-clear]');
-			if (clear) {
-				picks[Number(clear.dataset.clear)] = null;
-				return render();
-			}
-			const expand = target?.closest<HTMLElement>('[data-expand]');
-			if (expand) {
-				document.querySelector(`[data-seat="${expand.dataset.expand}"]`)
-					?.querySelectorAll<HTMLElement>('[data-overflow]').forEach((item) => { item.hidden = false; });
-				expand.setAttribute('aria-expanded', 'true');
-				expand.hidden = true;
-				return;
-			}
-			const composition = target?.closest<HTMLElement>('[data-load-composition]');
-			if (composition) {
-				(composition.dataset.loadComposition ?? '').split('|').forEach((champion, index) => { picks[index] = champion || null; });
-				render();
-				document.querySelector('[data-seat="0"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-			}
-		});
-
-		document.querySelectorAll<HTMLInputElement>('[data-seat-input]').forEach((input) => {
-			input.addEventListener('change', () => {
-				const champion = resolve(input.value);
-				input.setAttribute('aria-invalid', String(input.value !== '' && champion === null));
-				if (!champion) return;
-				picks[Number(input.dataset.seatInput)] = champion;
-				input.value = '';
-				render();
-			});
-		});
-
-		resetButton?.addEventListener('click', () => {
-			picks.fill(null);
-			render();
-		});
-
-		copyButton?.addEventListener('click', async () => {
-			const label = copyButton.querySelector<HTMLElement>('[data-copy-label]');
-			try {
-				await navigator.clipboard.writeText(window.location.href);
-				if (label) label.textContent = 'Lien copié';
-			} catch {
-				if (label) label.textContent = 'Copie impossible';
-			}
-			window.setTimeout(() => { if (label) label.textContent = 'Copier le lien'; }, 2000);
-		});
-
-		render();
-	}
-
-	const source = document.getElementById('draft-data')?.textContent;
-	if (source) start(JSON.parse(source) as DraftData);
-</script>

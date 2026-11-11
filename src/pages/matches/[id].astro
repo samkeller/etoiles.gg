@@ -20,8 +20,8 @@ const fullTeam = match.queueId === 440 && match.lineupSize === 5;
 <BaseLayout title={`${result} · ${formatDate(match.startedAt)} — ${SITE_NAME}`} description={`Le récit de notre match du ${formatDate(match.startedAt)} : composition, statistiques, objectifs et patch ${match.patch}.`}>
 	<main class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 px-4 py-10 sm:px-8 sm:py-14">
 		<nav aria-label="Fil d’Ariane">
-			<a href="/history" class="focus-ring inline-flex items-center gap-2 text-sm text-muted transition-colors hover:text-ink">
-				<OpggIcon name="ui-arrow-right" class="size-3 rotate-180" /> Retour à la mémoire des Étoiles
+			<a href="/history" data-navigate-back class="focus-ring inline-flex items-center gap-2 text-sm text-muted transition-colors hover:text-ink">
+				<OpggIcon name="ui-arrow-right" class="size-3 rotate-180" /> <span data-back-label>Retour à la mémoire des Étoiles</span>
 			</a>
 		</nav>
 		<header class="max-w-3xl">
@@ -33,3 +33,19 @@ const fullTeam = match.queueId === 440 && match.lineupSize === 5;
 		</Panel>
 	</main>
 </BaseLayout>
+
+<script>
+	import { getBackHref, navigateBack } from '../../lib/navigation';
+
+	const back = document.querySelector<HTMLAnchorElement>('[data-navigate-back]');
+	if (back) {
+		back.href = getBackHref(document.referrer, window.location.href);
+		const label = back.querySelector('[data-back-label]');
+		if (label && new URL(back.href).pathname !== '/history') label.textContent = 'Retour à la page précédente';
+		back.addEventListener('click', (event) => {
+			if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+			event.preventDefault();
+			navigateBack();
+		});
+	}
+</script>
