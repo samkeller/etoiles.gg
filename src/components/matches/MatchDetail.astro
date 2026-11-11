@@ -27,7 +27,7 @@ interface Props {
 }
 
 const { detail, titleId, moments = [], timeline } = Astro.props;
-const isWin = detail.outcome === "win";
+const isWin = !detail.isCollision && detail.outcome === "win";
 const maxDamage = Math.max(
 	...detail.teams.flatMap((team) =>
 		team.participants.map((participant) => participant.damage),
@@ -78,17 +78,17 @@ const objectives: {
 	>
 		<div>
 			<p class="label-caps flex items-center gap-2 text-muted">
-				{detail.queueId === 420 ? 'Classé Solo/Duo' : 'Flex'}
-				<StarPresence count={detail.lineupSize} size="md" />
+				{detail.isCollision ? 'Collision stellaire' : detail.queueId === 420 ? 'Classé Solo/Duo' : 'Flex'}
+				{detail.lineupSize !== null && <StarPresence count={detail.lineupSize} size="md" />}
 			</p>
 			<h2
 				id={titleId}
 				class:list={[
 					"mt-1 font-display text-4xl font-bold uppercase",
-					isWin ? "text-gold-gradient" : "text-grey-300",
+					detail.isCollision ? "text-gold-200" : isWin ? "text-gold-gradient" : "text-grey-300",
 				]}
 			>
-				{isWin ? "Victoire" : "Défaite"}
+				{detail.isCollision ? "Collision stellaire" : isWin ? "Victoire" : "Défaite"}
 			</h2>
 			<p class="mt-1 text-sm text-muted">
 				<time datetime={new Date(detail.startedAt).toISOString()}>
@@ -120,7 +120,9 @@ const objectives: {
 	{
 		detail.teams.map((team) => (
 			<section
-				aria-label={team.isOurs ? "Notre équipe" : "Équipe adverse"}
+				aria-label={detail.isCollision
+					? `Équipe côté ${team.side === "blue" ? "bleu" : "rouge"}`
+					: team.isOurs ? "Notre équipe" : "Équipe adverse"}
 			>
 				<div class="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 border-b border-gold-700/60 pb-2">
 					<h3 class="flex items-baseline gap-3">
@@ -132,7 +134,8 @@ const objectives: {
 									: "text-grey-300",
 							]}
 						>
-							{team.isOurs ? (detail.queueId === 420 ? "Équipe alliée" : "Les Étoiles") : "Adversaires"}
+							{detail.isCollision ? `Équipe ${team.side === "blue" ? "bleue" : "rouge"}` :
+								team.isOurs ? (detail.queueId === 420 ? "Équipe alliée" : "Les Étoiles") : "Adversaires"}
 						</span>
 						<span class="label-caps text-muted">
 							Côté {team.side === "blue" ? "bleu" : "rouge"} ·{" "}
