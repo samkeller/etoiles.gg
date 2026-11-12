@@ -1,122 +1,15 @@
 ---
 import type { TimelineState } from '../../lib/stats/timelines';
-import { OBJECTIVE_LABELS } from '../../lib/timeline';
-import { CHART, plotBottom, plotWidth, groupTimelineEvents, markerTone, markerTooltipTitle, timelineScale, type ChartEvent } from '../../lib/timelineChart';
-import { formatCompact, formatDuration } from '../../lib/format';
-import { championName } from '../../lib/lol';
-import ChampionIcon from '../ui/ChampionIcon.astro';
-import OpggIcon from '../ui/OpggIcon.astro';
-import type { OpggIconName } from '../../lib/opgg-icons';
-import TimelineTooltipRow from './TimelineTooltipRow.astro';
-import './matchTimeline';
+import MatchTimelineView from './MatchTimelineView';
 
-interface Props { timeline: TimelineState; }
-const { timeline } = Astro.props;
-const summary = timeline.summary;
-const scale = summary ? timelineScale(summary) : null;
-const events: ChartEvent[] = summary ? [
-	...summary.objectives.map((event) => ({ type: 'objective' as const, event })),
-	...(summary.kills?.map((event) => ({ type: 'kill' as const, event })) ?? []),
-].sort((a, b) => a.event.at - b.event.at) : [];
-const icons = {
-	dragon: 'objective-dragon', baron: 'objective-baronnashor', herald: 'objective-riftherald',
-	grubs: 'objective-voidgrub', tower: 'objective-tower', inhibitor: 'objective-inhibitor',
-} satisfies Record<keyof typeof OBJECTIVE_LABELS, OpggIconName>;
-const signed = (diff: number) => `${diff > 0 ? '+' : diff < 0 ? '−' : ''}${formatCompact(Math.abs(diff))}`;
-const time = (at: number) => formatDuration(Math.floor(at / 1000));
-const describe = (entry: ChartEvent) => entry.type === 'objective' ? OBJECTIVE_LABELS[entry.event.kind] :
-	`${entry.event.killer ? championName(entry.event.killer) : 'Environnement'} élimine ${championName(entry.event.victim)}`;
-const markers = events.map((entry) => ({
-	...entry, at: entry.event.at, ours: entry.event.ours, label: describe(entry),
-}));
-const groups = scale ? groupTimelineEvents(markers, scale.end, plotWidth * 820 / CHART.width) : [];
-const clip = `timeline-${crypto.randomUUID()}`;
-const points = summary && scale ? summary.gold.map((frame) => `${scale.x(frame.at)},${scale.y(frame.diff)}`).join(' ') : '';
-const last = summary?.gold.at(-1);
+interface Props { timeline: TimelineState; matchId: string; }
+const { timeline, matchId } = Astro.props;
 ---
-<section aria-label="Déroulé du match" class="min-w-0 border-t border-white/10 pt-5">
-	<h3 class="font-display text-xl text-ink">Le fil de la partie</h3>
-	{summary && scale && last ? (
-		<match-timeline class="mt-4 block" data-end={scale.end}>
-			<div class="flex flex-wrap items-center justify-between gap-3 text-xs">
-				<p class="text-muted"><span class="text-gold-200">Étoiles (+)</span> / <span class="text-hextech-300">adversaires (−)</span></p>
-				<div class="flex flex-wrap gap-4" aria-label="Événements affichés">
-					<label class="flex cursor-pointer items-center gap-2 text-ink">
-						<input type="checkbox" checked data-filter="objective" class="size-4 accent-gold-200 focus-ring" />
-						Objectifs ({summary.objectives.length})
-					</label>
-					<label class="flex items-center gap-2 text-ink">
-						<input type="checkbox" checked={summary.kills !== null} disabled={summary.kills === null} data-filter="kill" class="size-4 accent-gold-200 focus-ring" />
-						Kills{summary.kills !== null ? ` (${summary.kills.length})` : summary.version === 1 ? ' · à actualiser' : ' · indisponibles'}
-					</label>
-				</div>
-			</div>
-			<div class="mt-4 overflow-x-auto rounded border border-white/10 bg-night-950/60" tabindex="0" aria-label="Graphique et frise chronologique, défilables horizontalement" data-chart-scroll>
-				<div class="min-w-[820px] pb-3">
-					<svg viewBox={`0 0 ${CHART.width} ${CHART.height}`} class="block w-full" data-gold-chart role="img"
-						aria-label="Écart d’or au fil de la partie. Or : avance des Étoiles ; bleu : avance adverse. Navigation précise avec le curseur sous le graphique.">
-						<defs>
-							<clipPath id={`${clip}-positive`}><rect x={CHART.left} y={CHART.top} width={CHART.width - CHART.left - CHART.right} height={scale.y(0) - CHART.top} /></clipPath>
-							<clipPath id={`${clip}-negative`}><rect x={CHART.left} y={scale.y(0)} width={CHART.width - CHART.left - CHART.right} height={plotBottom - scale.y(0)} /></clipPath>
-						</defs>
-						{scale.yTicks.map((diff) => <g>
-							<line x1={CHART.left} x2={CHART.width - CHART.right} y1={scale.y(diff)} y2={scale.y(diff)}
-								class:list={[diff === 0 ? 'stroke-white/40' : 'stroke-white/10']} stroke-dasharray={diff === 0 ? '4 5' : undefined} />
-							<text x={CHART.left - 10} y={scale.y(diff) + 4} text-anchor="end" class="fill-muted text-[12px] tabular-nums">{signed(diff)}</text>
-						</g>)}
-						{scale.ticks.map((at) => <g>
-							<line x1={scale.x(at)} x2={scale.x(at)} y1={CHART.top} y2={plotBottom} class="stroke-white/5" />
-							<text x={scale.x(at)} y={plotBottom + 24} text-anchor={at === 0 ? 'start' : at === scale.end ? 'end' : 'middle'} class="fill-muted text-[12px] tabular-nums">{time(at)}</text>
-						</g>)}
-						{(['positive', 'negative'] as const).map((part) => <g clip-path={`url(#${clip}-${part})`} class:list={[part === 'positive' ? 'text-gold-200' : 'text-hextech-300']}>
-							<polygon points={`${scale.x(summary.gold[0].at)},${scale.y(0)} ${points} ${scale.x(last.at)},${scale.y(0)}`} fill="currentColor" fill-opacity="0.13" />
-							<polyline points={points} fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round" />
-						</g>)}
-						{summary.gold.map((frame) => <circle cx={scale.x(frame.at)} cy={scale.y(frame.diff)} r="3" data-frame data-at={frame.at} data-diff={frame.diff}
-							class:list={[frame.diff >= 0 ? 'fill-gold-200' : 'fill-hextech-300']}>
-							<title>{time(frame.at)} · {signed(frame.diff)} or</title>
-						</circle>)}
-						<line data-cursor x1={scale.x(last.at)} x2={scale.x(last.at)} y1={CHART.top} y2={plotBottom} class="pointer-events-none stroke-ink/60" stroke-dasharray="3 4" />
-						<circle data-cursor-point cx={scale.x(last.at)} cy={scale.y(last.diff)} r="5" class="pointer-events-none fill-night-950 stroke-ink" stroke-width="2" />
-					</svg>
-					<div class="relative h-12 border-t border-white/10" aria-label="Événements regroupés">
-						<div data-event-track class="absolute inset-y-0" style={`left:${CHART.left / CHART.width * 100}%;right:${CHART.right / CHART.width * 100}%`}>
-							{groups.map((group) => {
-								const entry = group.entries[0];
-								const title = markerTooltipTitle(group.entries);
-								return <button type="button" data-event-group data-at={group.from} data-tip-scroll
-									data-tip-title={title} data-tip={title} aria-label={`${title} · ${group.entries.length} événement${group.entries.length > 1 ? 's' : ''}`}
-									class:list={['focus-ring absolute top-2 grid size-7 -translate-x-1/2 place-items-center rounded border bg-night-900 hover:bg-night-800', markerTone(group.entries)]}
-									style={`left:${group.percent}%`}>
-									{
-										entry.type === 'objective' 
-											? <OpggIcon name={icons[entry.event.kind]} class="size-5" /> 
-											: entry.event.killer
-												? <ChampionIcon champion={entry.event.killer} size="xs" tip={false} class="border-0" /> 
-												: <OpggIcon name="stat-kills" class="size-5" />}
-									{group.entries.length > 1 && <span class="absolute -top-2 -right-2 min-w-4 rounded-full bg-ink px-1 text-[10px] leading-4 font-bold tabular-nums text-night-950">{group.entries.length}</span>}
-									<template data-tip-content>
-										{group.entries.map((member) => <TimelineTooltipRow entry={member} icon={member.type === 'objective' ? icons[member.event.kind] : 'stat-kills'} />)}
-									</template>
-								</button>;
-							})}
-						</div>
-					</div>
-					{markers.map((entry) => <template data-marker data-at={entry.at} data-type={entry.type} data-ours={String(entry.ours)} data-label={entry.label}>
-						{entry.type === 'objective' ? <OpggIcon name={icons[entry.event.kind]} class="size-5" /> :
-							entry.event.killer ? <ChampionIcon champion={entry.event.killer} size="xs" tip={false} class="border-0" /> : <OpggIcon name="stat-kills" class="size-5" />}
-						<template data-tip-content>
-							<TimelineTooltipRow entry={entry} icon={entry.type === 'objective' ? icons[entry.event.kind] : 'stat-kills'} />
-						</template>
-					</template>)}
-				</div>
-			</div>
-			<div class="mt-3 flex items-center gap-3">
-				<span data-gold-readout class="w-44 shrink-0 text-xs tabular-nums text-ink">{time(last.at)} · {signed(last.diff)} or</span>
-				<input data-gold-range type="range" min="0" max={summary.gold.length - 1} value={summary.gold.length - 1} step="1"
-					aria-label="Explorer les relevés d’or avec les flèches du clavier" aria-valuetext={`${time(last.at)} : ${signed(last.diff)} or`}
-					class="focus-ring h-5 min-w-0 flex-1 cursor-pointer accent-gold-200" />
-			</div>
-		</match-timeline>
-	) : <p class="mt-2 text-sm text-muted">{timeline.status === 'unavailable' ? 'Riot ne fournit pas de timeline pour cette partie.' : 'Timeline en attente de synchronisation.'}</p>}
-</section>
+<div data-match-timeline-root data-props={JSON.stringify({ timeline, matchId })}>
+	<MatchTimelineView timeline={timeline} matchId={matchId} />
+</div>
+
+<script>
+	import { hydrateMatchTimelines } from './MatchTimelineView';
+	hydrateMatchTimelines(document);
+</script>

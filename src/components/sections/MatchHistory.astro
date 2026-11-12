@@ -125,7 +125,7 @@ const historyUrl = (key: string, value: string) => {
 </section>
 
 <script>
-	import '../matches/matchTimeline';
+	import { disposeMatchTimelines, hydrateMatchTimelines } from '../matches/MatchTimelineView';
 	import { createMatchLoader } from '../../lib/match-loader';
 	const dialog = document.querySelector<HTMLDialogElement>('#match-dialog');
 	const body = dialog?.querySelector<HTMLElement>('[data-dialog-body]');
@@ -136,7 +136,10 @@ const historyUrl = (key: string, value: string) => {
 	let renderSequence = 0;
 
 	function showTemplate(template: HTMLTemplateElement | null) {
-		if (body && template) body.replaceChildren(template.content.cloneNode(true));
+		if (body && template) {
+			disposeMatchTimelines(body);
+			body.replaceChildren(template.content.cloneNode(true));
+		}
 	}
 
 	async function openMatch(matchId: string) {
@@ -152,6 +155,7 @@ const historyUrl = (key: string, value: string) => {
 			const html = await loader.load(matchId);
 			if (html !== null && request === renderSequence) {
 				body.innerHTML = html;
+				hydrateMatchTimelines(body);
 				body.scrollTop = 0;
 			}
 		} catch (error) {
@@ -180,6 +184,7 @@ const historyUrl = (key: string, value: string) => {
 		selectedId = null;
 		renderSequence += 1;
 		loader.cancel();
+		if (body) disposeMatchTimelines(body);
 		body?.setAttribute('aria-busy', 'false');
 	});
 
