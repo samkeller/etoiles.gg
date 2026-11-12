@@ -52,15 +52,6 @@ export default function DraftSidebar({ banRecords, opponentRecords }: Props) {
 				<MatchupPanel id="opponents-title" title="Nos plus faibles winrates" records={opponentRecords}
 					emptyMessage="Aucun adversaire rencontré à cinq." />
 			</div>
-			<p class="mt-3 text-xs text-muted">À cinq · trait large = forte incertitude</p>
-			<details class="mt-2 text-xs text-muted">
-				<summary class="focus-ring cursor-pointer hover:text-ink">Lire les winrates</summary>
-				<div class="mt-2 space-y-2 leading-relaxed">
-					<p>Point : taux observé. Trait : incertitude. Plus il est large, moins le taux est précis.</p>
-					<p>Intervalle de Wilson à 95 %, calculé dès une rencontre. Il ne couvre ni les changements de patch ni ceux de composition.</p>
-					<p>Bans habituels : tri par fréquence de ban. Adversaires : tri par winrate croissant, pas une recommandation de ban.</p>
-				</div>
-			</details>
 		</aside>
 	);
 }

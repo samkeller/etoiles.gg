@@ -2,32 +2,19 @@
 import MatchHistory from '../components/sections/MatchHistory.astro';
 import TeamOverview from '../components/sections/TeamOverview.astro';
 import TeamRoster from '../components/sections/TeamRoster.astro';
-import TeamCollective from '../components/sections/TeamCollective.astro';
 import SessionConstellation from '../components/memory/SessionConstellation.astro';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { db } from '../lib/db/db';
-import { getCollective, getMatches, getOverview, getPlayers, getSessionHistory } from '../lib/stats';
-import { isPosition } from '../lib/lol';
-import type { Position } from '../lib/types';
+import { getDiscoveries, getMatches, getOverview, getPlayers, getSessionHistory, getTeamStories } from '../lib/stats';
 import { TEAM_NAME } from '../lib/site';
 import MomentList from '../components/memory/MomentList.astro';
 import Discoveries from '../components/collective/Discoveries.astro';
-import { getTeamStories, getDiscoveries } from '../lib/stats';
-
-const associationRoles: Position[] = [];
-for (const key of ['role', 'role2']) {
-	const value = Astro.url.searchParams.get(key);
-	if (!value) continue;
-	if (!isPosition(value)) return new Response('Rôle invalide : attendu TOP, JUNGLE, MIDDLE, BOTTOM ou UTILITY.', { status: 400 });
-	if (!associationRoles.includes(value)) associationRoles.push(value);
-}
 
 const overview = getOverview(db);
 const players = getPlayers(db);
 const fullMatches = getMatches(db, 'full');
 const partialMatches = getMatches(db, 'partial');
 const sessions = getSessionHistory(db);
-const collective = getCollective(db, associationRoles);
 const recentMatches = fullMatches.slice(0, overview.recentForm.length).reverse();
 const stories = getTeamStories(db);
 const discoveries = getDiscoveries(db);
@@ -50,7 +37,6 @@ const discoveries = getDiscoveries(db);
 			<Discoveries discoveries={discoveries} />
 			<SessionConstellation sessions={sessions} compact />
 			<MatchHistory fullMatches={fullMatches} partialMatches={partialMatches} />
-			<TeamCollective collective={collective} associationRoles={associationRoles} />
 		</div>
 	</main>
 </BaseLayout>

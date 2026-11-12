@@ -1,0 +1,32 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import TeamCollective from '../components/sections/TeamCollective.astro';
+import { db } from '../lib/db/db';
+import { getCollective } from '../lib/stats';
+import { isPosition } from '../lib/lol';
+import type { Position } from '../lib/types';
+import { TEAM_NAME } from '../lib/site';
+
+const associationRoles: Position[] = [];
+for (const key of ['role', 'role2']) {
+	const value = Astro.url.searchParams.get(key);
+	if (!value) continue;
+	if (!isPosition(value)) return new Response('Rôle invalide : attendu TOP, JUNGLE, MIDDLE, BOTTOM ou UTILITY.', { status: 400 });
+	if (!associationRoles.includes(value)) associationRoles.push(value);
+}
+
+const collective = getCollective(db, associationRoles);
+---
+
+<BaseLayout title={`Analyse collective — ${TEAM_NAME}`} description="Associations de champions et compositions observées dans les parties jouées à cinq.">
+	<main class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-10 px-4 py-8 sm:px-8 sm:py-12">
+		<header class="max-w-3xl">
+			<p class="label-caps text-hextech-300">Comprendre</p>
+			<h1 class="mt-2 font-display text-4xl font-medium tracking-tight text-ink sm:text-5xl">Nos tendances à cinq</h1>
+			<p class="mt-4 text-sm leading-relaxed text-muted">
+				Des observations sur les associations et compositions déjà jouées, comparées au bilan global de l’équipe.
+			</p>
+		</header>
+		<TeamCollective collective={collective} associationRoles={associationRoles} />
+	</main>
+</BaseLayout>

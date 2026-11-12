@@ -6,10 +6,18 @@ import { getSyncStatus } from '../lib/sync-status';
 import SyncStatus from '../components/ui/SyncStatus.astro';
 import TooltipLayer from '../components/ui/TooltipLayer.astro';
 import OpggIcon from '../components/ui/OpggIcon.astro';
+import type { OpggIconName } from '../lib/opgg-icons';
 
 interface Props {
 	title?: string;
 	description?: string;
+}
+
+interface NavigationItem {
+	href: string;
+	label: string;
+	icon: OpggIconName;
+	active: boolean;
 }
 
 const {
@@ -17,11 +25,12 @@ const {
 	description = `Le carnet de bord de ${TEAM_NAME} : comprendre, préparer et se souvenir.`,
 } = Astro.props;
 const path = Astro.url.pathname;
-const navigation = [
+const navigation: NavigationItem[] = [
 	{ href: '/', label: 'Accueil', icon: 'nav-home', active: path === '/' },
 	{ href: '/history', label: 'Mémoire', icon: 'nav-history', active: path.startsWith('/history') },
+	{ href: '/analysis', label: 'Analyse', icon: 'nav-analysis', active: path.startsWith('/analysis') },
 	{ href: '/draft', label: 'Draft', icon: 'nav-draft', active: path.startsWith('/draft') },
-] as const;
+];
 const syncStatus = getSyncStatus(db);
 ---
 
@@ -66,7 +75,7 @@ const syncStatus = getSyncStatus(db);
 											item.active ? 'text-gold-100' : 'text-muted hover:text-ink',
 										]}
 									>
-										<OpggIcon name={item.icon} class="size-3.5" />
+										{item.icon && <OpggIcon name={item.icon} class="size-3.5" />}
 										{item.label}
 									</a>
 								</li>

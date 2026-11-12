@@ -43,6 +43,7 @@ export const OPGG_ICON_NAMES = [
 	'nav-home',
 	'nav-history',
 	'nav-draft',
+	'nav-analysis',
 ] as const;
 
 export type OpggIconName = (typeof OPGG_ICON_NAMES)[number];

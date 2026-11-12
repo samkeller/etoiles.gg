@@ -31,7 +31,7 @@ function roleHref(role: Position): string {
 	const params = new URLSearchParams();
 	next.forEach((value, index) => params.set(index === 0 ? 'role' : 'role2', value));
 	const query = params.toString();
-	return `/${query ? `?${query}` : ''}#collective-title`;
+	return `/analysis${query ? `?${query}` : ''}#collective-title`;
 }
 ---
 
@@ -62,7 +62,7 @@ function roleHref(role: Position): string {
 				})}
 			</ul>
 			{associationRoles.length > 0 && (
-				<a href="/#collective-title" class="focus-ring text-xs text-muted underline underline-offset-4 hover:text-ink">Tous les rôles</a>
+				<a href="/analysis#collective-title" class="focus-ring text-xs text-muted underline underline-offset-4 hover:text-ink">Tous les rôles</a>
 			)}
 		</nav>
 	)}

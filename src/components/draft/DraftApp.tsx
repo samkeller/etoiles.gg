@@ -110,15 +110,6 @@ export default function DraftApp(data: DraftAppData) {
 							/>
 						))}
 					</section>
-					<p class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-						<span class="inline-flex items-center gap-1">
-							<DraftIcon name="ui-arrow-down" class="size-3 rotate-180 text-win" /> +5 points ou plus
-						</span>
-						<span class="inline-flex items-center gap-1">
-							<DraftIcon name="ui-arrow-down" class="size-3 text-loss" /> −5 points ou moins
-						</span>
-						<span>Écart avec le winrate à cinq du joueur sur ce champion, selon les autres picks · 5 parties communes minimum.</span>
-					</p>
 				</div>
 			)}
 
