@@ -6,10 +6,10 @@ Etoiles.win - TODO list
 
 ### Todo
 
-- [ ] réaliser une refonte globale de la documentation du projet afin de centraliser les informations, supprimer les redondances et contradictions potentielles, clarifier les sources de vérité et définir une organisation cohérente entre README, documentation technique, fonctionnelle et opérationnelle.
-- [ ] alléger le README pour en faire une véritable porte d'entrée au projet, en séparant la documentation fonctionnelle, technique et opérationnelle dans des fichiers dédiés sous docs/, sans perdre les informations existantes.
 
 
 ### In Progress
 
 ### Done ✓
+- [x] réaliser une refonte globale de la documentation du projet afin de centraliser les informations, supprimer les redondances et contradictions potentielles, clarifier les sources de vérité et définir une organisation cohérente entre README, documentation technique, fonctionnelle et opérationnelle.
+- [x] alléger le README pour en faire une véritable porte d'entrée au projet, en séparant la documentation fonctionnelle, technique et opérationnelle dans des fichiers dédiés sous docs/, sans perdre les informations existantes.
